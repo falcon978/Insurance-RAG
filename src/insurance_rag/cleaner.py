@@ -1,0 +1,114 @@
+"""
+cleaner.py
+----------
+All text-cleaning logic in one place.
+
+Kept as pure functions (no class state) so they are easy to test,
+swap out, or extend independently of the rest of the pipeline.
+"""
+
+import re
+import unicodedata
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def clean_block_text(text: str) -> str:
+    """
+    Full cleaning pass for a raw PDF text block.
+
+    Applies in order:
+      1. Unicode normalisation   — fixes ligatures, smart quotes, etc.
+      2. De-hyphenation          — rejoins words split across line breaks
+      3. Space/tab collapse      — removes duplicate whitespace
+      4. Newline normalisation   — caps consecutive blank lines at two
+      5. Strip                   — removes leading / trailing whitespace
+    """
+    text = _normalize_unicode(text)
+    text = _dehyphenate(text)
+    text = _collapse_spaces(text)
+    text = _normalize_newlines(text)
+    return text.strip()
+
+
+def clean_section_text(text: str) -> str:
+    """
+    Lighter pass used on already-assembled section text before chunking.
+    Skips de-hyphenation (already done per-block) but repeats the rest
+    to catch any artefacts introduced during block concatenation.
+    """
+    text = _collapse_spaces(text)
+    text = _normalize_newlines(text)
+    return text.strip()
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers  (prefix _ = not imported by default)
+# ---------------------------------------------------------------------------
+
+def _normalize_unicode(text: str) -> str:
+    """
+    NFC normalisation + manual replacement of common PDF glitches:
+      - Ligatures  : ﬁ → fi,  ﬂ → fl,  ﬀ → ff, etc.
+      - Smart quotes: " " → "  '  ' → '
+      - En/em dash : – — → -
+      - Bullet variants → •
+    """
+    # NFC first so composed characters are consistent
+    text = unicodedata.normalize("NFC", text)
+
+    replacements = {
+        "\ufb01": "fi",   # ﬁ
+        "\ufb02": "fl",   # ﬂ
+        "\ufb00": "ff",   # ﬀ
+        "\ufb03": "ffi",  # ﬃ
+        "\ufb04": "ffl",  # ﬄ
+        "\u2018": "'",    # '
+        "\u2019": "'",    # '
+        "\u201c": '"',    # "
+        "\u201d": '"',    # "
+        "\u2013": "-",    # en dash
+        "\u2014": "-",    # em dash
+        "\u2022": "•",    # bullet (already bullet, normalise variants)
+        "\u25cf": "•",    # ●
+        "\u25e6": "•",    # ◦
+        "\u2023": "•",    # ➣
+        "\xa0":   " ",    # non-breaking space
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+
+    return text
+
+
+def _dehyphenate(text: str) -> str:
+    """
+    Rejoin words broken across lines with a hyphen.
+
+    PDF line-break hyphenation looks like:
+        "hospitaliz-\nation"  →  should be  "hospitalization"
+        "co-\npayment"        →  should be  "co-payment"   (keep intentional hyphens)
+
+    Strategy: only merge when the character before the hyphen and after
+    the newline are both word characters (letters/digits).  This avoids
+    incorrectly merging genuine compound words that happen to wrap.
+    """
+    return re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+
+
+def _collapse_spaces(text: str) -> str:
+    """
+    Replace any run of spaces or tabs (but NOT newlines) with a single space.
+    Preserves newline structure so paragraph detection still works downstream.
+    """
+    return re.sub(r"[ \t]+", " ", text)
+
+
+def _normalize_newlines(text: str) -> str:
+    """
+    Cap consecutive blank lines at two (one blank line = paragraph break).
+    Three or more blank lines are just visual padding in the PDF source.
+    """
+    return re.sub(r"\n{3,}", "\n\n", text)
