@@ -130,6 +130,13 @@ class PDFExtractor:
 
     # ── private helpers ───────────────────────────────────────────────────
 
+    def _require_open(self):
+        """Ensure the document is loaded before performing operations."""
+        if self._doc is None:
+            raise RuntimeError(
+                f"PDFExtractor is not open. Use 'with PDFExtractor(\"{self.pdf_path}\") as ext:'"
+            )
+
     @staticmethod
     def _parse_block_spans(raw_block: dict) -> tuple[str, float, bool]:
         """
