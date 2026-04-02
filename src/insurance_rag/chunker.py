@@ -14,7 +14,7 @@ import hashlib
 import re
 from typing import List
 
-from langchain_text_splitters.character import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from .models import PolicyChunk
 from .cleaner import clean_section_text
 
@@ -50,6 +50,7 @@ class HierarchicalChunker:
 
     def chunk(self, sections: List[dict]) -> List[PolicyChunk]:
         all_chunks: List[PolicyChunk] = []
+        seen_ids = set() # Track IDs to prevent ChromaDB DuplicateID crashes
 
         for section in sections:
             text = clean_section_text(section.get("text", ""))
@@ -92,9 +93,17 @@ class HierarchicalChunker:
                 # INJECTION: Prepend the lineage to the raw text
                 payload_text = lineage_prefix + raw_chunk_text.strip()
                 
-                chunk_id = _make_chunk_id(section.get("heading", "unknown"), idx, raw_chunk_text)
+                # Generate base ID using the FULL text and page number
+                chunk_id = _make_chunk_id(section.get("heading", "unknown"), pages[0], idx, payload_text)
 
-                # Ensure metadata dict exists and is populated
+                # Collision Resolver: Guarantee 100% uniqueness for ChromaDB
+                base_id = chunk_id
+                counter = 1
+                while chunk_id in seen_ids:
+                    chunk_id = f"{base_id}_dup{counter}"
+                    counter += 1
+                seen_ids.add(chunk_id)
+
                 metadata = section.get("metadata", {})
                 metadata.update({
                     "chunk_index": idx,
@@ -112,7 +121,7 @@ class HierarchicalChunker:
                     section        = major_label,
                     sub_section    = sub_label,
                     heading        = section.get("heading", ""),
-                    text           = payload_text,               # The enriched text to embed!
+                    text           = payload_text,               
                     token_estimate = len(payload_text) // 4,
                     metadata       = metadata
                 ))
@@ -184,10 +193,11 @@ def _has_list(text: str) -> bool:
     """True if the chunk contains bullet / numbered list items."""
     return bool(_LIST_RE.search(text))
 
-def _make_chunk_id(heading: str, idx: int, text: str) -> str:
+def _make_chunk_id(heading: str, page: int, idx: int, text: str) -> str:
     """Generate a stable, human-readable chunk ID for idempotent upserts."""
-    digest = hashlib.md5(f"{heading}{idx}{text[:40]}".encode()).hexdigest()[:8]
+    # Hash the ENTIRE text and the page number to prevent collisions
+    digest = hashlib.md5(f"{heading}{page}{idx}{text}".encode()).hexdigest()[:8]
     slug = re.sub(r"[^a-z0-9]+", "_", heading[:30].lower()).strip("_")
     if not slug:
         slug = "chunk"
-    return f"{slug}_{idx}_{digest}"
+    return f"{slug}_p{page}_{idx}_{digest}"
