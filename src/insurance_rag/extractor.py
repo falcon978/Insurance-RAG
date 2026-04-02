@@ -14,6 +14,7 @@ import fitz  # PyMuPDF
 from pathlib import Path
 
 from .models import TextBlock
+from .patterns import _MAJOR_SECTION_RE, _CLAUSE_RE, _NOT_A_SECTION
 
 
 # ---------------------------------------------------------------------------
@@ -21,9 +22,9 @@ from .models import TextBlock
 # These are the values to tune when adapting to a new insurer's PDF.
 # ---------------------------------------------------------------------------
 
-HEADING_FONT_MIN_PT = 10.5      # blocks at or above this size → candidate heading
+HEADING_FONT_MIN_PT = 12      # blocks at or above this size → candidate heading
 FOOTER_ZONE_PT      = 50        # pts from page bottom → footer zone
-HEADER_ZONE_PT      = 60        # pts from page top    → running header zone
+HEADER_ZONE_PT      = 90        # pts from page top    → running header zone
 HEADER_MAX_CHARS    = 80        # short blocks in header zone only
 
 
@@ -79,17 +80,35 @@ class PDFExtractor:
                 if raw_block["type"] != 0:
                     continue
 
-                text, max_font_size, is_bold = self._parse_block_spans(raw_block)
+                text, bold_text, max_font_size, is_bold, bold_ratio = self._parse_block_spans(raw_block)
 
                 if not text.strip():
                     continue
 
-                bbox       = tuple(raw_block["bbox"])
+                bbox = tuple(raw_block["bbox"])
+
                 block_type = self._classify_block(
-                    text, max_font_size, is_bold,
+                    text, max_font_size, bold_ratio,
                     y0=bbox[1], y1=bbox[3],
                     page_height=page_height,
                 )
+
+                if block_type == "subheading":
+                    blocks.append(TextBlock(
+                        page_num   = page_idx + 1,   # 1-indexed for human readability
+                        block_num  = b_idx,
+                        bbox       = bbox,
+                        text       = bold_text,
+                        block_type = block_type,
+                        font_size  = max_font_size,
+                        is_bold    = is_bold,
+                        bold_ratio = bold_ratio,
+                    ))
+                    block_type = "text"  # also add the full text as a regular block for chunking
+                    text = text[len(bold_text):].strip()
+                
+                if not text.strip():
+                    continue
 
                 blocks.append(TextBlock(
                     page_num   = page_idx + 1,   # 1-indexed for human readability
@@ -99,6 +118,7 @@ class PDFExtractor:
                     block_type = block_type,
                     font_size  = max_font_size,
                     is_bold    = is_bold,
+                    bold_ratio = bold_ratio,
                 ))
 
         return blocks
@@ -124,8 +144,8 @@ class PDFExtractor:
         """
         self._require_open()
         return [
-            {"level": lvl, "title": title, "page": page}
-            for lvl, title, page in self._doc.get_toc()
+            {"level": entry[0], "title": entry[1], "page": entry[2]}
+            for entry in self._doc.get_toc()
         ]
 
     # ── private helpers ───────────────────────────────────────────────────
@@ -138,66 +158,84 @@ class PDFExtractor:
             )
 
     @staticmethod
-    def _parse_block_spans(raw_block: dict) -> tuple[str, float, bool]:
+    def _parse_block_spans(raw_block: dict) -> tuple[str, float, float]:
         """
         Walk block → lines → spans and return:
-          (concatenated_text, max_font_size, any_span_is_bold)
+          (concatenated_text, max_font_size, bold_ratio)
         """
         lines_text   = []
         max_font_size = 0.0
-        is_bold       = False
+        is_bold = False
+        total_chars = 0
+        bold_chars = 0
+        bold_text = ""
 
         for line in raw_block["lines"]:
             line_text = ""
             for span in line["spans"]:
                 line_text    += span["text"]
                 max_font_size = max(max_font_size, span["size"])
+                char_count    = len(span["text"].strip())
+                total_chars   += char_count
                 if "bold" in span["font"].lower():
                     is_bold = True
+                    bold_chars += char_count
+                if bold_chars == total_chars and char_count > 0:
+                    bold_text += span["text"].strip()
             lines_text.append(line_text)
 
-        return "\n".join(lines_text), max_font_size, is_bold
+        bold_ratio = float(bold_chars) / float(total_chars) if total_chars > 0 else 0.0
+        return "\n".join(lines_text), bold_text, max_font_size, is_bold, bold_ratio
+    
 
     @staticmethod
     def _classify_block(
         text: str,
         font_size: float,
-        is_bold: bool,
+        bold_ratio: float,
         y0: float,
         y1: float,
         page_height: float,
     ) -> str:
-        """
-        Assign one of four labels to a block using positional + font heuristics.
-
-        "footer"  — bottom FOOTER_ZONE_PT of the page
-        "header"  — top HEADER_ZONE_PT of the page + short text
-        "heading" — large font OR bold + short + all-caps
-        "text"    — everything else (body copy)
-
-        Tuning guide
-        ------------
-        If real headings are being classified as "text":
-            → lower HEADING_FONT_MIN_PT
-        If body copy is being classified as "heading":
-            → raise HEADING_FONT_MIN_PT, or tighten the len/uppercase check
-        If footers are leaking into body:
-            → raise FOOTER_ZONE_PT
-        """
-
-        # ── footer zone ────────────────────────────────────────────────
+        # ── footer / header zones (unchanged) ─────────────────────────────
         if y1 > (page_height - FOOTER_ZONE_PT):
             return "footer"
-
-        # ── running header zone ────────────────────────────────────────
-        if y0 < HEADER_ZONE_PT and len(text) < HEADER_MAX_CHARS:
+        if y0 < HEADER_ZONE_PT:
             return "header"
 
-        # ── heading detection ──────────────────────────────────────────
-        large_font   = font_size >= HEADING_FONT_MIN_PT
-        caps_bold    = is_bold and len(text) < 120 and text.strip().upper() == text.strip()
+        # Normalise newlines for pattern matching (e.g. "2.\nDefinitions")
+        normalised = text.replace("\n", " ").strip()
+        text_len   = len(normalised)
 
-        if large_font or caps_bold:
-            return "heading"
+        # ── fully bold ─────────────────────────────────────────────────────
+        if bold_ratio > 0.9:
+
+            # Blocklist: bold but definitely not a section
+            if _NOT_A_SECTION.match(normalised):
+                return "text"
+
+            # Matches a known major section pattern → L1 heading
+            if _MAJOR_SECTION_RE.match(normalised) or font_size >= HEADING_FONT_MIN_PT:
+                return "heading"
+
+            # Matches a clause pattern → L2 subheading
+            # (e.g. "2.1.1. Accidental Bodily Injury" or "(i) Pre-existing")
+            if _CLAUSE_RE.match(normalised):
+                return "subheading"
+
+            # Fully bold, short, no pattern match
+            # Could be a named section like "BASE BENEFITS" or "Standard Definitions:"
+            # Use all-caps or ends-with-colon as tiebreakers
+            # if normalised.upper() == normalised or normalised.endswith(":"):
+            #     return "heading"
+
+            # Fully bold, short, mixed case, no pattern — safest bet is subheading
+            return "subheading"
+
+        # ── partially bold ─────────────────────────────────────────────────
+        if bold_ratio > 0.1:
+            # Partially bold blocks are subheadings only if short
+            # Long partially-bold blocks are just body text with inline emphasis
+            return "subheading"
 
         return "text"

@@ -28,20 +28,6 @@ from .cleaner import clean_block_text
 #   "PART B – GENERAL CONDITIONS"
 #   "2. DEFINITIONS"
 #   "4. BENEFITS AND COVERAGE"
-_SECTION_PATTERNS = [
-    re.compile(
-        r"^(SECTION|PART|CHAPTER)\s+[A-Z0-9]+[\s\-–:]+(.+)$", re.IGNORECASE
-    ),
-    re.compile(
-        r"^(\d+\.?\s+)(DEFINITIONS|BENEFITS|COVERAGE|EXCLUSIONS|CONDITIONS|"
-        r"CLAIMS|PREMIUM|RENEWABILITY|GENERAL|WAITING PERIOD|"
-        r"HOSPITALIZATION|SPECIAL|OPTIONAL|SCHEDULE)",
-        re.IGNORECASE,
-    ),
-]
-
-# Numbered clause headings, e.g.:  "4.2.1 Waiting Period"
-_CLAUSE_PATTERN = re.compile(r"^(\d+\.\d+[\.\d]*)\s+(.+)$")
 
 # Keywords that identify benefit / schedule tables — used as metadata flags
 _SCHEDULE_KEYWORDS = re.compile(
@@ -79,11 +65,14 @@ class SectionReconstructor:
         accumulates body text under the most recently seen heading.
         """
         sections: list[dict] = []
-        current = _new_section()
+
+        # State tracking for hierarchy
+        active_major_section = "PREAMBLE"
+        
+        # Initialize with the default starting section
+        current = _new_section(section=active_major_section)
 
         for block in blocks:
-
-            # Headers and footers were already classified — discard them
             if block.block_type in ("header", "footer"):
                 continue
 
@@ -91,28 +80,50 @@ class SectionReconstructor:
             if not text:
                 continue
 
-            # ── is this block a heading? ───────────────────────────────
-            if block.block_type == "heading" or self._is_major_heading(text, block):
-
-                # Flush the current accumulator if it has content
-                if current["text"].strip():
+            # ── 1. MAJOR HEADING (L1) ──────────────────────────────────
+            # Resets the "Parent" context
+            if block.block_type == "heading":
+                if current["text"].strip() or current["heading"]:
                     sections.append(current)
 
-                label   = _extract_section_label(text)
+                label = _extract_section_label(text, "heading")
+                # Only update active_major_section if this is truly a major heading
+                if label["is_major"]:
+                    active_major_section = label["section"]
+                
                 current = _new_section(
-                    section     = label["section"],
+                    section     = active_major_section,
+                    sub_section = "",
+                    heading     = text,
+                    page        = block.page_num,
+                )
+                continue
+
+            # ── 2. SUBHEADING (L2) ─────────────────────────────────────
+            # Starts a new chunk but INHERITS the active_major_section
+            if block.block_type == "subheading":
+                # Only flush if the current chunk has some content 
+                # (Prevents empty sections when a Heading is followed by a Subheading)
+                if current["text"].strip() or current["heading"]:
+                    sections.append(current)
+
+                label = _extract_section_label(text, "subheading")
+                # If it's a subheading, 'section' in label usually contains the title
+                # We move that title to sub_section or heading to keep the Parent intact
+                current = _new_section(
+                    section     = active_major_section, 
                     sub_section = label["sub_section"],
                     heading     = text,
                     page        = block.page_num,
                 )
                 continue
 
-            # ── body text: accumulate ──────────────────────────────────
+            # ── 3. BODY TEXT ACCUMULATION ──────────────────────────────
             current["text"] += text + "\n"
             current["pages"].add(block.page_num)
 
-        # Don't forget the final section — it never triggers a heading flush
-        if current["text"].strip():
+        # Final flush for the last block
+        if current["text"].strip() or current["heading"]:
             sections.append(current)
 
         return sections
@@ -128,15 +139,18 @@ class SectionReconstructor:
         (e.g. the insurer uses 10pt bold for section headings) but still
         match a known structural pattern.
         """
+
+        if len(text) > 120: return False
+
         for pattern in _SECTION_PATTERNS:
             if pattern.match(text):
                 return True
 
-        # Numbered clause AND (bold OR large font)
-        if _CLAUSE_PATTERN.match(text) and (
-            block.is_bold or block.font_size >= 10.5
-        ):
-            return True
+        # # Numbered clause AND (bold OR large font)
+        # if _CLAUSE_PATTERN.match(text) and (
+        #     block.is_bold or block.font_size >= 10.5
+        # ):
+        #     return True
 
         return False
 
@@ -161,23 +175,48 @@ def _new_section(
     }
 
 
-def _extract_section_label(text: str) -> dict:
+def _extract_section_label(text: str, block_type: str) -> dict:
     """
-    Parse section and sub_section strings from a heading.
+    Parse section and sub_section from a heading string.
 
-    Returns {"section": str, "sub_section": str}
-    Falls back to using the full (truncated) heading as the section label.
+    Returns {"section": str, "sub_section": str, "is_major": bool}
+
+    "is_major" tells the reconstructor whether to update active_major_section.
+    If False, the caller should keep the existing parent context.
     """
-    for pattern in _SECTION_PATTERNS:
-        m = pattern.match(text)
-        if m:
-            return {"section": text.strip(), "sub_section": ""}
+    # Normalise embedded newlines before matching
+    normalised = text.replace("\n", " ").strip()
 
-    m = _CLAUSE_PATTERN.match(text)
-    if m:
+    # 1. Major section pattern — e.g. "4. Exclusions", "SECTION 3 – BENEFITS"
+    # for pattern in _SECTION_PATTERNS:
+    #     m = pattern.match(normalised)
+    #     if m:
+    #         return {
+    #             "section"   : normalised,
+    #             "sub_section": "",
+    #             "is_major"  : True,
+    #         }
+
+    if block_type == "heading":
         return {
-            "section"    : m.group(2).strip(),
-            "sub_section": m.group(1).strip(),
+            "section"   : normalised,
+            "sub_section": "",
+            "is_major"  : True,
         }
 
-    return {"section": text[:60].strip(), "sub_section": ""}
+    # 2. Clause pattern — e.g. "2.1.1. Accidental Bodily Injury"
+    # m = _CLAUSE_PATTERN.match(normalised)
+    # if m and block_type == "subheading":
+    #     return {
+    #         "section"    : "",        # full text: "2.1.1. Accidental/Accident"
+    #         "sub_section": normalised, # just the number: "2.1.1."
+    #         "is_major"   : False,
+    #     }
+
+    # 3. No pattern matched — this is a bold phrase, not a structural heading
+    #    Return is_major=False so active_major_section is preserved
+    return {
+        "section"   : "",
+        "sub_section": normalised,  # put the full text here since we have no better info
+        "is_major"  : False,
+    }

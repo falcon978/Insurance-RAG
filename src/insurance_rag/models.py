@@ -23,6 +23,7 @@ class TextBlock:
     block_type : one of "text" | "heading" | "header" | "footer"
     font_size  : largest font size seen across all spans in this block
     is_bold    : True if any span in the block uses a bold font
+    bold_ratio : ratio of bold characters to total characters in the block
     """
 
     page_num: int
@@ -32,6 +33,7 @@ class TextBlock:
     block_type: str
     font_size: float = 0.0
     is_bold: bool = False
+    bold_ratio: float = 0.0
 
 
 @dataclass
