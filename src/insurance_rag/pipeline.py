@@ -83,6 +83,7 @@ class ExtractionPipeline:
         persist_dir     : str  = "./chroma_data",
         collection_name : str  = "insurance_policies",
         verbose         : bool = True,
+        device          : str  = "cpu",
     ):
         self.pdf_path        = Path(pdf_path)
         self.chunk_size      = chunk_size
@@ -90,6 +91,7 @@ class ExtractionPipeline:
         self.persist_dir     = persist_dir
         self.collection_name = collection_name
         self.verbose         = verbose
+        self.device          = device
 
     def run(self) -> ExtractionResult:
         """Execute all four phases and return an ExtractionResult."""
@@ -128,7 +130,8 @@ class ExtractionPipeline:
         self._log(f"Phase 4/4 — Indexing into ChromaDB ({self.persist_dir}) …")
         store = PolicyVectorStore(
             persist_directory=self.persist_dir,
-            collection_name=self.collection_name
+            collection_name=self.collection_name,
+            device=self.device,
         )
         store.index_chunks(chunks)
 
