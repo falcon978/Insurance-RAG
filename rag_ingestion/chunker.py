@@ -35,54 +35,58 @@ class MarkdownHierarchicalChunker:
 
     def chunk(self, md_text: str, source_file: str) -> list[PolicyChunk]:
         """
-        Splits Markdown text and returns fully formed PolicyChunks with injected context.
+        Splits Markdown text and ensures page number inheritance across sub-chunks.
+        Tracks both start and end pages for chunks that span across page breaks.
+        Returns fully formed PolicyChunks with injected context.
         """
-        policy_chunks = []
-        
-        # 1. Split structurally (LangChain attaches headers to doc.metadata)
+        # 1. Structural Split (By Headers)
         structural_docs = self.md_splitter.split_text(md_text)
         
-        # 2. Split by character limit (LangChain carries the metadata forward)
+        # 2. Sub-split by Character Limit
         final_docs = self.text_splitter.split_documents(structural_docs)
 
+        policy_chunks = []
+        current_page = 1  # Stateful tracker
+
         for i, doc in enumerate(final_docs):
-            # Extract tracked headers from metadata
+            # Extract headers for context injection
             parent = doc.metadata.get("major_section", "General Conditions")
             clause = doc.metadata.get("clause", "")
             sub_clause = doc.metadata.get("sub_clause", "")
             
             # Combine clauses for the metadata field
             full_clause = " > ".join(filter(None, [clause, sub_clause]))
+
+            # Find all markers in the current chunk
+            page_matches = re.findall(r'\[__RAG_PIPELINE_PAGE_(\d+)__\]', doc.page_content)
             
-            raw_text = clean_section_text(doc.page_content)
-            if not raw_text.strip():
-                continue
-
-            # Find all page markers in this chunk's text
-            page_matches = re.findall(r'\[__RAG_PIPELINE_PAGE_(\d+)__\]', raw_text)
-
-            # Determine the page(s)
-            page_start = int(page_matches[0]) if page_matches else 0
+            # page_start is either the first marker found OR the last seen 'current_page'
+            page_start = int(page_matches[0]) if page_matches else current_page
+            
+            # page_end is the last marker found in this chunk OR the same as page_start
             page_end = int(page_matches[-1]) if page_matches else page_start
+            
+            # Update the stateful tracker for the NEXT chunk
+            current_page = page_end
+            # ---------------------------
 
-            # Clean the markers out so the LLM doesn't see them
-            clean_payload = re.sub(r'\n*', '', raw_text)
+            # Clean markers for the LLM
+            clean_payload = re.sub(r'\[__RAG_PIPELINE_PAGE_\d+__\]', '', doc.page_content)
+            clean_payload = re.sub(r'\n+', '\n', clean_payload).strip()
 
-            # ── CONTEXT INJECTION LOGIC ─────────────────────────────────
+            # Context Injection
             context_prefix = f"DOCUMENT SECTION: {parent}\n"
             if full_clause:
                 context_prefix += f"CLAUSE: {full_clause}\n"
-            
             injected_payload = f"{context_prefix}---\n{clean_payload}"
-            # ─────────────────────────────────────────────────────────────
+
+            # Assess table/list presence for metadata (simple heuristics)
+            has_table = "|" in clean_payload and "-|-" in clean_payload
+            has_list = bool(re.search(r"^\s*[-*+]\s", clean_payload, re.MULTILINE))
 
             # Generate stable ID
             digest_str = f"{source_file}_{parent}_{full_clause}_{i}".encode()
             chunk_id = hashlib.md5(digest_str).hexdigest()[:12]
-
-            # Assess table/list presence
-            has_table = "|" in raw_text and "-|-" in raw_text # Standard MD table syntax
-            has_list = bool(re.search(r"^\s*[-*+]\s", raw_text, re.MULTILINE))
 
             policy_chunks.append(
                 PolicyChunk(
