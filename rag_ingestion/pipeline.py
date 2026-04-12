@@ -63,14 +63,16 @@ class ExtractionPipeline:
         extractor = PDFExtractor(str(self.pdf_path))
         doc_meta  = extractor.get_document_metadata()
         toc       = extractor.get_toc()
-        md_text   = extractor.extract_markdown()
+        md_text   = extractor.extract_markdown_with_pages()
 
         # ── Phase 1.5: Markdown Cleaning ──────────────────────────────
-        clean_md = clean_markdown_layout(raw_md)
+        clean_md = clean_markdown_layout(md_text)
 
         # ── Phase 2: Chunk & Inject ───────────────────────────────────
         self._log("Phase 2/3 — Semantic Chunking & Context Injection …")
-        chunker = MarkdownHierarchicalChunker()
+        chunker = MarkdownHierarchicalChunker(
+            chunk_size=
+        )
         chunks = chunker.chunk(md_text, self.pdf_path.name)
         self._log(f"           {len(chunks)} RAG chunks created")
 

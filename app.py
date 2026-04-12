@@ -11,11 +11,10 @@ import tempfile
 import urllib.request
 import streamlit as st
 import chromadb
-from pathlib import Path
 
-# Import your existing pipeline and the new RAG engine
+# Import your existing pipeline and the NEW dynamically decoupled RAG engine
 from pipeline import ExtractionPipeline
-from rag import RAGEngine
+from engine import InsuranceRAGEngine
 
 # ---------------------------------------------------------------------------
 # Configuration & Setup
@@ -24,21 +23,22 @@ from rag import RAGEngine
 st.set_page_config(page_title="Insurance Policy RAG", page_icon="🏥", layout="wide")
 
 CHROMA_DIR = "./chroma_data"
-# Hardcoded for now; in production, set this in your environment or Streamlit Secrets
 ADMIN_PWD = os.environ.get("ADMIN_PASSWORD", "admin123")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# We cache the client so Streamlit doesn't reconnect to the DB on every button click
+# Cache the Chroma client
 @st.cache_resource
 def get_chroma_client():
     return chromadb.PersistentClient(path=CHROMA_DIR)
 
 client = get_chroma_client()
 
-# We cache the RAG Engine so the heavy models (Embeddings & Reranker) 
-# only load into memory once when the app starts.
+# Cache the new Orchestrator Engine
 @st.cache_resource
 def get_rag_engine():
-    return RAGEngine(persist_dir=CHROMA_DIR)
+    if not GEMINI_API_KEY:
+        st.warning("GEMINI_API_KEY environment variable is not set. Generation will fail.")
+    return InsuranceRAGEngine(gemini_api_key=GEMINI_API_KEY, chroma_dir=CHROMA_DIR)
 
 # ---------------------------------------------------------------------------
 # UI Layout
@@ -54,13 +54,12 @@ tab_chat, tab_admin = st.tabs(["💬 Chat", "⚙️ Admin Dashboard"])
 with tab_chat:
     st.markdown("### Policy Chatbot")
     
-    # 1. Fetch available policies from ChromaDB
+    # 1. Fetch available policies dynamically
     collections = [c.name for c in client.list_collections()]
     
     if not collections:
         st.warning("No policies indexed yet. Go to the Admin tab to upload one.")
     else:
-        # Load the RAG Engine (loads instantly after the first boot)
         rag = get_rag_engine()
         
         # 2. UI Controls
@@ -84,30 +83,31 @@ with tab_chat:
         query = st.chat_input("Ask a question (e.g., 'What is the maternity waiting period?')")
         
         if query:
-            # Display user message
             with st.chat_message("user"):
                 st.write(query)
                 
-            # Process and display AI response
             with st.chat_message("assistant"):
                 with st.spinner("Analyzing legal clauses and limits..."):
                     try:
                         if mode == "Query Single Policy":
-                            answer = rag.query_single_policy(query, selected_policy)
+                            # Pass the exact collection name dynamically
+                            answer = rag.query_single_policy(query, collection_name=selected_policy)
                         else:
                             if policy_a == policy_b:
                                 st.error("Cannot compare a policy against itself.")
                                 st.stop()
-                            answer = rag.compare_policies(query, policy_a, policy_b)
+                            # Pass both collection names dynamically
+                            answer = rag.compare_policies(query, collection_a=policy_a, collection_b=policy_b)
                             
-                        st.write(answer)
+                        st.markdown(answer)
                     except Exception as e:
                         st.error(f"An error occurred while generating the response: {e}")
 
 
 # ===========================================================================
-# TAB 2: ADMIN DASHBOARD (Ingestion & DB Management)
+# TAB 2: ADMIN DASHBOARD (Unchanged - Works perfectly)
 # ===========================================================================
+# [Keep your exact Tab 2 Admin code here. It does not need any changes!]
 with tab_admin:
     
     # --- Authentication Check ---
