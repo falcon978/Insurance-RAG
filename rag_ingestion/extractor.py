@@ -8,6 +8,9 @@ Uses PyMuPDF4LLM's advanced layout engine to extract structurally perfect Markdo
 import fitz
 import pymupdf4llm
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PDFExtractor:
     """
@@ -21,16 +24,21 @@ class PDFExtractor:
         """
         Extracts Markdown while injecting hidden page markers.
         """
-        # Setting page_chunks=True returns a list of dictionaries per page
+        logger.info(f"Extracting markdown from {self.pdf_path.name}")
+        
+        # page_chunks=True returns a list of dictionaries (one per page)
         page_data = pymupdf4llm.to_markdown(self.pdf_path, page_chunks=True)
         
         full_md = ""
         for page in page_data:
-            page_num = page.get("metadata", {}).get("page", 0)
+            # PyMuPDF uses 0-based indexing; we add +1 for human-readable page numbers
+            raw_page_num = page.get("metadata", {}).get("page", 0)
+            display_page_num = raw_page_num + 1
+            
             text = page.get("text", "")
             
-            # Inject a custom marker at the top of every page's text
-            marker = f"\n\n[__RAG_PIPELINE_PAGE_{page_num}___]\n\n"
+            # Inject a custom marker at the top of every page's text for later retrieval
+            marker = f"\n\n[__RAG_PIPELINE_PAGE_{display_page_num}__]\n\n"
             full_md += marker + text
             
         return full_md
