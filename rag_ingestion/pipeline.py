@@ -38,12 +38,16 @@ class ExtractionPipeline:
         pdf_path: str,
         persist_dir: str = "./chroma_data",
         collection_name: str = "insurance_policies",
+        chunk_size: int = 1200,
+        chunk_overlap: int = 150,
         device: str = "cpu",
         verbose: bool = True,
     ):
         self.pdf_path = Path(pdf_path)
         self.persist_dir = persist_dir
         self.collection_name = collection_name
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
         self.device = device
         self.verbose = verbose
 
@@ -71,7 +75,8 @@ class ExtractionPipeline:
         # ── Phase 2: Chunk & Inject ───────────────────────────────────
         self._log("Phase 2/3 — Semantic Chunking & Context Injection …")
         chunker = MarkdownHierarchicalChunker(
-            chunk_size=
+            chunk_size=self.chunk_size, 
+            chunk_overlap=self.chunk_overlap
         )
         chunks = chunker.chunk(md_text, self.pdf_path.name)
         self._log(f"           {len(chunks)} RAG chunks created")
