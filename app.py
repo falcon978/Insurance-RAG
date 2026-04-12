@@ -54,7 +54,6 @@ tab_chat, tab_admin = st.tabs(["💬 Chat", "⚙️ Admin Dashboard"])
 with tab_chat:
     st.markdown("### Policy Chatbot")
     
-    # 1. Fetch available policies dynamically
     collections = [c.name for c in client.list_collections()]
     
     if not collections:
@@ -74,8 +73,9 @@ with tab_chat:
             policy_a = col1.selectbox("Select First Policy", collections, key="pol_a")
             policy_b = col2.selectbox("Select Second Policy", collections, key="pol_b")
             
-            if policy_a == policy_b:
-                st.warning("Please select two different policies to compare.")
+        with st.expander("⚙️ Advanced Tuning"):
+            ret_k = st.slider("Retrieval Pool (top_k)", 5, 50, 15, help="Number of chunks pulled from ChromaDB + BM25")
+            rerank_k = st.slider("LLM Context Chunks", 1, 10, 3, help="Final number of highly relevant chunks sent to the LLM")
                 
         st.divider()
         
@@ -90,19 +90,29 @@ with tab_chat:
                 with st.spinner("Analyzing legal clauses and limits..."):
                     try:
                         if mode == "Query Single Policy":
-                            # Pass the exact collection name dynamically
-                            answer = rag.query_single_policy(query, collection_name=selected_policy)
+                            # ---> PASS THE SLIDER VALUES HERE <---
+                            answer = rag.query_single_policy(
+                                query, 
+                                collection_name=selected_policy,
+                                retrieve_top_k=ret_k,
+                                rerank_top_k=rerank_k
+                            )
                         else:
                             if policy_a == policy_b:
                                 st.error("Cannot compare a policy against itself.")
                                 st.stop()
-                            # Pass both collection names dynamically
-                            answer = rag.compare_policies(query, collection_a=policy_a, collection_b=policy_b)
+                            # ---> PASS THE SLIDER VALUES HERE <---
+                            answer = rag.compare_policies(
+                                query, 
+                                collection_a=policy_a, 
+                                collection_b=policy_b,
+                                retrieve_top_k=ret_k,
+                                rerank_top_k=rerank_k
+                            )
                             
                         st.markdown(answer)
                     except Exception as e:
                         st.error(f"An error occurred while generating the response: {e}")
-
 
 # ===========================================================================
 # TAB 2: ADMIN DASHBOARD (Unchanged - Works perfectly)

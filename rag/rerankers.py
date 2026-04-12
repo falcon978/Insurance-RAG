@@ -7,7 +7,7 @@ without altering the core retrieval logic.
 """
 
 import logging
-from typing import List
+from typing import List, Tuple, Union
 from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
 
@@ -23,7 +23,7 @@ class ContextReranker:
         logger.info(f"Loading Cross-Encoder model: {model_name} on {device}")
         self.model = CrossEncoder(model_name, device=device)
         
-    def rerank(self, query: str, documents: List[Document], top_k: int = 4) -> List[Document]:
+    def rerank(self, query: str, documents: List[Document], top_k: int = 4, return_scores: bool = False) -> Union[List[Document], List[Tuple[Document, float]]]:
         """
         Scores document relevance and returns the top K highest-scoring chunks.
         
@@ -31,9 +31,10 @@ class ContextReranker:
             query: The user's question.
             documents: The broad list of candidate LangChain Document objects.
             top_k: The final number of documents to retain.
+            return_scores: If True, returns a list of (Document, score) tuples.
             
         Returns:
-            A sorted list of the top_k Document objects.
+            A sorted list of the top_k Document objects (or tuples if return_scores=True).
         """
         if not documents:
             return []
@@ -50,5 +51,9 @@ class ContextReranker:
         # Sort descending (highest score first)
         scored_docs.sort(key=lambda x: x[1], reverse=True)
         
-        # Extract and return just the Document objects (dropping the score tuple)
+        if return_scores:
+            # Notebooks use this to plot confidence distributions
+            return [(doc, float(score)) for doc, score in scored_docs[:top_k]]
+            
+        # Extract and return just the Document objects (dropping the score tuple) for the standard pipeline
         return [doc for doc, score in scored_docs[:top_k]]
