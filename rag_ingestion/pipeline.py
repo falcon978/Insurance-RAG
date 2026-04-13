@@ -14,6 +14,27 @@ from .cleaner import clean_markdown_layout
 from .chunker import MarkdownHierarchicalChunker
 from .indexer import PolicyVectorStore
 
+import logging
+import sys
+
+# 1. Set up a basic console handler so logs actually have a place to print
+logging.basicConfig(
+    level=logging.ERROR, # Default everything to ERROR
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+# 2. Mute specific noisy libraries (just in case)
+logging.getLogger("langchain").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+
+# 3. WAKE UP your specific modules! (Assuming they use logger = logging.getLogger(__name__))
+logging.getLogger("extractor").setLevel(logging.INFO)
+logging.getLogger("chunker").setLevel(logging.INFO)
+logging.getLogger("indexer").setLevel(logging.INFO)
+logging.getLogger("pipeline").setLevel(logging.INFO)
+
+
 
 @dataclass
 class ExtractionResult:

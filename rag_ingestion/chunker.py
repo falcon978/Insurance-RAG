@@ -9,9 +9,12 @@ applies standard sizing, and injects the parent-child lineage directly into the 
 
 import hashlib
 import re
+import logging
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from .models import PolicyChunk
 from .cleaner import clean_section_text
+
+logger = logging.getLogger(__name__)
 
 class MarkdownHierarchicalChunker:
     def __init__(self, chunk_size: int = 1200, chunk_overlap: int = 150):

@@ -15,12 +15,15 @@ Key Features:
 
 from typing import List
 import os
+import logging
 
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 
 from .models import PolicyChunk
+
+logger = logging.getLogger(__name__)
 
 
 class PolicyVectorStore:
@@ -34,7 +37,7 @@ class PolicyVectorStore:
         collection_name: str = "insurance_policies",
         device: str = "cpu" # Change to "cuda" if you have an Nvidia GPU
     ):
-        print(f"Initializing embedding model (this may take a moment)...")
+        logging.info(f"Initializing embedding model (this may take a moment)...")
         # Using the BAAI/bge-large-en-v1.5 model as discussed
         self.embeddings = HuggingFaceEmbeddings(
             model_name="BAAI/bge-large-en-v1.5",
@@ -42,7 +45,7 @@ class PolicyVectorStore:
             encode_kwargs={'normalize_embeddings': True} # Crucial for cosine similarity
         )
         
-        print(f"Connecting to local Chroma database at '{persist_directory}'...")
+        logging.info(f"Connecting to local Chroma database at '{persist_directory}'...")
         self.vector_store = Chroma(
             collection_name=collection_name,
             embedding_function=self.embeddings,
@@ -54,7 +57,7 @@ class PolicyVectorStore:
         Converts PolicyChunks to LangChain Documents and upserts them in batches.
         """
         if not chunks:
-            print("No chunks provided to index.")
+            logging.info("No chunks provided to index.")
             return
 
         documents = []
@@ -90,7 +93,7 @@ class PolicyVectorStore:
 
         # 3. Batch Upsert to avoid memory limits
         total_batches = (len(documents) + batch_size - 1) // batch_size
-        print(f"Adding {len(documents)} chunks to the database in {total_batches} batches...")
+        logging.info(f"Adding {len(documents)} chunks to the database in {total_batches} batches...")
 
         for i in range(0, len(documents), batch_size):
             batch_docs = documents[i : i + batch_size]
@@ -98,9 +101,9 @@ class PolicyVectorStore:
             
             # add_documents acts as an upsert if IDs are provided
             self.vector_store.add_documents(documents=batch_docs, ids=batch_ids)
-            print(f"  Processed batch {(i//batch_size) + 1}/{total_batches}")
+            logging.info(f"  Processed batch {(i//batch_size) + 1}/{total_batches}")
 
-        print("Indexing complete!")
+        logging.info("Indexing complete!")
         
     def get_retriever(self, k: int = 4):
         """

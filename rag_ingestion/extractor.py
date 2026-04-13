@@ -31,9 +31,8 @@ class PDFExtractor:
         
         full_md = ""
         for page in page_data:
-            # PyMuPDF uses 0-based indexing; we add +1 for human-readable page numbers
-            raw_page_num = page.get("metadata", {}).get("page", 0)
-            display_page_num = raw_page_num + 1
+            # PyMuPDF uses 1-based indexing
+            display_page_num = page.get("metadata").get("page_number")
             
             text = page.get("text", "")
             
