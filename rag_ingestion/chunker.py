@@ -83,6 +83,7 @@ class MarkdownHierarchicalChunker:
             # Assess table/list presence for metadata (simple heuristics)
             has_table = "|" in clean_payload and "-|-" in clean_payload
             has_list = bool(re.search(r"^\s*[-*+]\s", clean_payload, re.MULTILINE))
+            char_count = len(injected_payload)
 
             # Generate stable ID
             digest_str = f"{source_file}_{parent}_{full_clause}_{i}".encode()
@@ -102,7 +103,8 @@ class MarkdownHierarchicalChunker:
                     metadata={
                         "has_table": has_table,
                         "has_list": has_list,
-                        "chunk_index": i
+                        "chunk_index": i,
+                        "char_count" : char_count,
                     }
                 )
             )

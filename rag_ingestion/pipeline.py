@@ -78,7 +78,7 @@ class ExtractionPipeline:
             chunk_size=self.chunk_size, 
             chunk_overlap=self.chunk_overlap
         )
-        chunks = chunker.chunk(md_text, self.pdf_path.name)
+        chunks = chunker.chunk(clean_md, self.pdf_path.name)
         self._log(f"           {len(chunks)} RAG chunks created")
 
         # ── Phase 3: Index ────────────────────────────────────────────

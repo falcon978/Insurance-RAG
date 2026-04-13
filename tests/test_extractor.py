@@ -11,10 +11,10 @@ from pathlib import Path
 # Make src/ importable when running from the project root
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from insurance_rag.cleaner import clean_block_text
-from insurance_rag.chunker import Chunker, _make_chunk_id
-from insurance_rag.reconstructor import SectionReconstructor
-from insurance_rag.models import TextBlock
+from rag_ingestion.cleaner import clean_block_text
+from rag_ingestion.chunker import Chunker, _make_chunk_id
+from rag_ingestion.reconstructor import SectionReconstructor
+from rag_ingestion.models import TextBlock
 
 
 # ---------------------------------------------------------------------------
