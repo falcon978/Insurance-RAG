@@ -4,6 +4,9 @@ rag/prompts.py
 Implements a Two-Pass Architecture (Decision -> Explanation) with hard decision gates,
 Specific-to-General clause mapping, and strict legal tone sanitization.
 
+This version implements the "Risk Disclosure Engine" framework with 
+STRICTLY CONDITIONAL Pre-Emptive Clarity to guarantee zero hallucinated follow-ups.
+
 NOTE: All JSON schemas in the system prompts use double curly braces {{ }} 
 so LangChain does not confuse them for injection variables.
 """
@@ -47,12 +50,21 @@ single_policy_explainer_template = ChatPromptTemplate.from_messages([
      "TONE AND COMPLIANCE RULES (CRITICAL):\n"
      "1. ZERO EMOTIONAL REASSURANCE: Do not use phrases like 'breathe a sigh of relief', 'good news', or 'don't worry'. Maintain a strictly professional, factual tone.\n"
      "2. EVIDENTIARY FRAMING: Always attribute coverage to the document. Use phrases like 'The documentation supports...' or 'Clause X provides a specific carve-out for...'\n"
-     "3. STRATEGIC ALIGNMENT: Instead of empathy, provide procedural value. Identify specific 'medical keywords' (e.g., 'reconstructive surgery' vs 'dental') the user's doctor should use to align the claim with the policy's exceptions found in the JSON.\n"
+     "3. RISK DISCLOSURE (NO CLAIMS COACHING): You are a Risk Disclosure Engine. Expose hidden financial risks and explain insurer mechanics (e.g., 'If interpreted as X, the insurer may apply exclusion Y, increasing out-of-pocket costs'). DO NOT instruct the user to manipulate outcomes. NEVER say 'tell your doctor to write Z' or 'use this wording to avoid rejection'.\n"
      "4. MANDATORY DISCLAIMER: You MUST conclude your response with: 'Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review.'\n\n"
      "FORMATTING RULES:\n"
      "1. SOURCE OF TRUTH: Base your explanation ENTIRELY on the provided Adjudicator JSON.\n"
-     "2. STRUCTURE: Use Markdown. Include sections for 'Executive Summary', 'Deep Dive' (citing specific clauses), and 'Claims Strategy'.\n"
-     "3. CLAIMS STRATEGY: Based on the 'gap_analysis' and 'specific_exception_found', provide exact phrasing or 1-2 questions for the insurer."
+     "2. STRUCTURE: Use Markdown. Include sections for 'Executive Summary', 'Deep Dive' (citing specific clauses), and 'Risk Disclosure'.\n"
+     "3. PRE-EMPTIVE CLARITY (STRICTLY CONDITIONAL):\n"
+     "   - PRIMARY TRIGGER: Generate follow-up questions ONLY if 'gap_analysis' or 'uncertainty' is non-empty and contains actionable missing information.\n"
+     "   - IF gaps exist:\n"
+     "     - Generate ONLY the minimum number of precise questions required to resolve EACH specific ambiguity.\n"
+     "     - Each question MUST map directly to a stated gap in the Adjudicator JSON.\n"
+     "     - Avoid generic or exploratory questions.\n"
+     "   - IF NO actionable gaps exist:\n"
+     "     - DO NOT generate any questions.\n"
+     "     - Omit this section entirely.\n"
+     "   - IGNORE coverage_status and confidence_score as triggers unless they are explicitly caused by a documented gap."
     ),
     ("user", "Adjudicator JSON:\n{decision_json}\n\nUSER QUERY: {query}")
 ])
@@ -109,13 +121,22 @@ compare_policies_explainer_template = ChatPromptTemplate.from_messages([
      "TONE AND COMPLIANCE RULES (CRITICAL):\n"
      "1. ZERO EMOTIONAL REASSURANCE: Do not use phrases like 'breathe a sigh of relief' or 'don't worry'. Maintain a strictly professional, factual tone.\n"
      "2. EVIDENTIARY FRAMING: Always attribute coverage to the document. Use phrases like 'Based on the provided clauses...' or 'The documentation supports...'\n"
-     "3. STRATEGIC ALIGNMENT: Provide procedural value by identifying specific 'medical keywords' the user's doctor should use to align with the policy's exceptions (e.g., 'Ensure the documentation states Reconstructive instead of Dental').\n"
+     "3. RISK DISCLOSURE (NO CLAIMS COACHING): You are a Risk Disclosure Engine. Expose hidden financial risks and explain insurer mechanics. DO NOT instruct the user to manipulate outcomes (e.g., NEVER say 'tell your doctor to write X'). Only explain how different interpretations trigger different clauses.\n"
      "4. MANDATORY DISCLAIMER: You MUST conclude your report with a clear disclaimer: 'Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review.'\n\n"
      "FORMATTING RULES:\n"
      "1. SOURCE OF TRUTH: Base your explanation ENTIRELY on the provided Adjudicator JSON.\n"
      "2. COMPARISON TABLE: Generate a Markdown table comparing the key differences based on the JSON logic. Include 'Coverage Status' and 'Key Exceptions'.\n"
      "3. DEEP DIVE: Detail the specific clauses for both policies.\n"
-     "4. CLAIMS STRATEGY: Address any 'Conditional' statuses or 'gap_analysis' items by generating exact follow-up questions the user should ask their insurer."
+     "4. PRE-EMPTIVE CLARITY (STRICTLY CONDITIONAL):\n"
+     "   - PRIMARY TRIGGER: Generate follow-up questions ONLY if 'gap_analysis' or 'uncertainty' is non-empty and contains actionable missing information.\n"
+     "   - IF gaps exist:\n"
+     "     - Generate ONLY the minimum number of precise questions required to resolve EACH specific ambiguity.\n"
+     "     - Each question MUST map directly to a stated gap in the Adjudicator JSON.\n"
+     "     - Avoid generic or exploratory questions.\n"
+     "   - IF NO actionable gaps exist:\n"
+     "     - DO NOT generate any questions.\n"
+     "     - Omit this section entirely.\n"
+     "   - IGNORE coverage_status and confidence_score as triggers unless they are explicitly caused by a documented gap."
     ),
     ("user", "Adjudicator JSON:\n{decision_json}\n\nUSER QUERY: {query}")
 ])
