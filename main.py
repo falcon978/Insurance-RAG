@@ -1,0 +1,145 @@
+"""
+main.py
+-------
+FastAPI Backend. Orchestrates ingestion and RAG querying.
+"""
+import os
+import shutil
+import tempfile
+import urllib.request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from typing import List
+
+from config import settings
+from engine import InsuranceRAGEngine
+from rag_ingestion.pipeline import ExtractionPipeline
+from schemas import (
+    SingleQueryRequest, 
+    CompareQueryRequest, 
+    UrlIngestRequest,
+    CollectionListResponse, 
+    StandardResponse
+)
+
+app = FastAPI(title="Insurance RAG API")
+
+# Initialize the Engine using central settings
+rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+
+# --- QUERY ENDPOINTS ---
+
+@app.post("/api/v1/query/single", response_model=StandardResponse)
+def query_single(req: SingleQueryRequest):
+    try:
+        answer = rag_engine.query_single_policy(
+            query=req.query, 
+            collection_name=req.collection_name,
+            history=req.history,
+            retrieve_top_k=req.retrieve_top_k, 
+            rerank_top_k=req.rerank_top_k
+        )
+        return StandardResponse(status="success", message="Query processed", data={"markdown_report": answer})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/query/compare", response_model=StandardResponse)
+def query_compare(req: CompareQueryRequest):
+    try:
+        answer = rag_engine.compare_policies(
+            query=req.query, 
+            collection_a=req.collection_a, 
+            collection_b=req.collection_b,
+            history=req.history,
+            retrieve_top_k=req.retrieve_top_k, 
+            rerank_top_k=req.rerank_top_k
+        )
+        return StandardResponse(status="success", message="Comparison processed", data={"markdown_report": answer})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- ADMIN ENDPOINTS ---
+
+@app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
+def list_collections():
+    try:
+        if settings.vector_db_type == "pinecone":
+            import pinecone
+            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
+            index = pc.Index(settings.pinecone_index_name)
+            # Pinecone namespaces act as our collections
+            stats = index.describe_index_stats()
+            collections = list(stats['namespaces'].keys())
+        else:
+            import chromadb
+            client = chromadb.PersistentClient(path=settings.chroma_dir)
+            collections = [c.name for c in client.list_collections()]
+        
+        return CollectionListResponse(collections=collections)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch collections: {str(e)}")
+
+@app.delete("/api/v1/admin/collections/{collection_name}")
+def delete_collection(collection_name: str):
+    try:
+        if settings.vector_db_type == "pinecone":
+            import pinecone
+            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
+            idx = pc.Index(settings.pinecone_index_name)
+            idx.delete(delete_all=True, namespace=collection_name)
+        else:
+            import chromadb
+            client = chromadb.PersistentClient(path=settings.chroma_dir)
+            client.delete_collection(collection_name)
+        
+        # Also clean up the local BM25 pickle
+        bm25_path = os.path.join(settings.chroma_dir, collection_name)
+        if os.path.exists(bm25_path):
+            shutil.rmtree(bm25_path)
+            
+        return StandardResponse(status="success", message=f"Collection {collection_name} deleted")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/admin/ingest/file")
+async def ingest_file(collection_name: str = Form(...), file: UploadFile = File(...)):
+    """Handles PDF upload and triggers the Extraction Pipeline."""
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+            
+        ExtractionPipeline(
+            pdf_path=tmp_path, 
+            persist_dir=settings.chroma_dir, 
+            collection_name=collection_name
+        ).run()
+        
+        return StandardResponse(status="success", message=f"Successfully indexed {file.filename}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+@app.post("/api/v1/admin/ingest/url")
+def ingest_url(req: UrlIngestRequest):
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            r = urllib.request.urlopen(urllib.request.Request(str(req.url), headers=headers))
+            tmp.write(r.read())
+            tmp_path = tmp.name
+        ExtractionPipeline(
+            pdf_path=tmp_path,
+            persist_dir=settings.chroma_dir,
+            collection_name=req.collection_name
+        ).run()
+        return StandardResponse(status="success", message="URL indexed")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)

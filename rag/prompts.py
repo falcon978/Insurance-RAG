@@ -37,6 +37,7 @@ single_policy_decision_template = ChatPromptTemplate.from_messages([
      "  \"confidence_score\": \"High | Medium | Low\"\n"
      "}}"
     ),
+    ("placeholder", "{history}"),
     ("user", "Context:\n{context}\n\nUSER QUERY: {query}")
 ])
 
@@ -108,6 +109,7 @@ compare_policies_decision_template = ChatPromptTemplate.from_messages([
      "  }}\n"
      "}}"
     ),
+    ("placeholder", "{history}"),
     ("user", "Policy A Context:\n{context_a}\n\nPolicy B Context:\n{context_b}\n\nUSER QUERY: {query}")
 ])
 

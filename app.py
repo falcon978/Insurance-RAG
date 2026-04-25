@@ -1,129 +1,152 @@
 """
 app.py
 ------
-Streamlit Interface for the Insurance RAG System.
-Features a public Chatbot tab and a secured Admin tab for document ingestion.
+Streamlit Frontend Client for the Insurance RAG System.
+Features: 
+- Conversational Chat with Sliding Window Memory.
+- Advanced RAG Tuning (Top-K Sliders).
+- Complete Admin Dashboard (Ingestion, Deletion, and Collection Management).
 """
 
 import os
-import time
-import tempfile
-import urllib.request
+import requests
 import streamlit as st
-import chromadb
-
-# Import your existing pipeline and the NEW dynamically decoupled RAG engine
-from pipeline import ExtractionPipeline
-from engine import InsuranceRAGEngine
 
 # ---------------------------------------------------------------------------
-# Configuration & Setup
+# Configuration & State Initialization
 # ---------------------------------------------------------------------------
-
 st.set_page_config(page_title="Insurance Policy RAG", page_icon="🏥", layout="wide")
 
-CHROMA_DIR = "./chroma_data"
+# API endpoint from environment or default local
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 ADMIN_PWD = os.environ.get("ADMIN_PASSWORD", "admin123")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# Cache the Chroma client
-@st.cache_resource
-def get_chroma_client():
-    return chromadb.PersistentClient(path=CHROMA_DIR)
+# Initialize Chat History in Session State
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-client = get_chroma_client()
-
-# Cache the new Orchestrator Engine
-@st.cache_resource
-def get_rag_engine():
-    if not GEMINI_API_KEY:
-        st.warning("GEMINI_API_KEY environment variable is not set. Generation will fail.")
-    return InsuranceRAGEngine(gemini_api_key=GEMINI_API_KEY, chroma_dir=CHROMA_DIR)
+# Initialize Admin Login State
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
 
 # ---------------------------------------------------------------------------
-# UI Layout
+# API Communication Helpers
 # ---------------------------------------------------------------------------
+@st.cache_data(ttl=5) # Cache briefly to prevent redundant API calls
+def fetch_collections():
+    """Fetches the list of available insurance policy collections from the API."""
+    try:
+        res = requests.get(f"{API_BASE_URL}/api/v1/admin/collections", timeout=5)
+        res.raise_for_status()
+        return res.json().get("collections", [])
+    except Exception as e:
+        st.error(f"Failed to connect to backend: {e}")
+        return []
 
-st.title("🏥 Insurance Policy Analyzer")
+available_policies = fetch_collections()
 
-tab_chat, tab_admin = st.tabs(["💬 Chat", "⚙️ Admin Dashboard"])
+# ---------------------------------------------------------------------------
+# UI Sidebar - Navigation & Settings
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.header("🏥 RAG Configuration")
+    mode = st.radio("Analysis Mode", ["Query Single Policy", "Compare Two Policies"])
+    
+    st.divider()
+    
+    st.markdown("### Selection")
+    if mode == "Query Single Policy":
+        selected_policy = st.selectbox("Select Policy", available_policies)
+    else:
+        # Default to first two if available
+        p1_idx = 0 if len(available_policies) > 0 else None
+        p2_idx = 1 if len(available_policies) > 1 else 0
+        policy_a = st.selectbox("Policy A", available_policies, index=p1_idx, key="pol_a")
+        policy_b = st.selectbox("Policy B", available_policies, index=p2_idx, key="pol_b")
+
+    st.divider()
+
+    with st.expander("⚙️ Advanced RAG Tuning"):
+        st.info("Adjust these to balance between broader context and strict legal accuracy.")
+        ret_k = st.slider("Retrieval K (Broad Match Pool)", 5, 50, 15, help="Number of chunks pulled from the database initially.")
+        rerank_k = st.slider("Rerank K (LLM Context Window)", 1, 10, 3, help="Final number of top chunks sent to the LLM for adjudication.")
+
+    st.divider()
+    if st.button("🗑️ Clear Chat History", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# Main UI Tabs
+# ---------------------------------------------------------------------------
+tab_chat, tab_admin = st.tabs(["💬 Policy Chatbot", "🛠️ Admin Dashboard"])
 
 # ===========================================================================
-# TAB 1: PUBLIC CHAT 
+# TAB 1: CONVERSATIONAL CHAT
 # ===========================================================================
 with tab_chat:
-    st.markdown("### Policy Chatbot")
-    
-    collections = [c.name for c in client.list_collections()]
-    
-    if not collections:
-        st.warning("No policies indexed yet. Go to the Admin tab to upload one.")
-    else:
-        rag = get_rag_engine()
-        
-        # 2. UI Controls
-        st.markdown("#### Analysis Mode")
-        mode = st.radio("Select Mode", ["Query Single Policy", "Compare Two Policies"], horizontal=True, label_visibility="collapsed")
-        
-        st.markdown("#### Policy Selection")
-        if mode == "Query Single Policy":
-            selected_policy = st.selectbox("Select Policy", collections)
-        else:
-            col1, col2 = st.columns(2)
-            policy_a = col1.selectbox("Select First Policy", collections, key="pol_a")
-            policy_b = col2.selectbox("Select Second Policy", collections, key="pol_b")
-            
-        with st.expander("⚙️ Advanced Tuning"):
-            ret_k = st.slider("Retrieval Pool (top_k)", 5, 50, 15, help="Number of chunks pulled from ChromaDB + BM25")
-            rerank_k = st.slider("LLM Context Chunks", 1, 10, 3, help="Final number of highly relevant chunks sent to the LLM")
-                
-        st.divider()
-        
-        # 3. Chat Input & Processing
-        query = st.chat_input("Ask a question (e.g., 'What is the maternity waiting period?')")
-        
-        if query:
-            with st.chat_message("user"):
-                st.write(query)
-                
-            with st.chat_message("assistant"):
-                with st.spinner("Analyzing legal clauses and limits..."):
-                    try:
-                        if mode == "Query Single Policy":
-                            # ---> PASS THE SLIDER VALUES HERE <---
-                            answer = rag.query_single_policy(
-                                query, 
-                                collection_name=selected_policy,
-                                retrieve_top_k=ret_k,
-                                rerank_top_k=rerank_k
-                            )
-                        else:
-                            if policy_a == policy_b:
-                                st.error("Cannot compare a policy against itself.")
-                                st.stop()
-                            # ---> PASS THE SLIDER VALUES HERE <---
-                            answer = rag.compare_policies(
-                                query, 
-                                collection_a=policy_a, 
-                                collection_b=policy_b,
-                                retrieve_top_k=ret_k,
-                                rerank_top_k=rerank_k
-                            )
-                            
-                        st.markdown(answer)
-                    except Exception as e:
-                        st.error(f"An error occurred while generating the response: {e}")
+    # Display existing chat messages
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat Input
+    if query := st.chat_input("What is the maternity waiting period for this policy?"):
+        # 1. Add user message to UI and State
+        st.session_state.messages.append({"role": "user", "content": query})
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        # 2. Call backend API
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing legal clauses and limits..."):
+                try:
+                    # IMPLEMENT SLIDING WINDOW: Only send the last 6 messages as history
+                    # This ensures the LLM has immediate context without hitting token limits.
+                    history_payload = st.session_state.messages[-7:-1] if st.session_state.messages else []
+                    
+                    if mode == "Query Single Policy":
+                        if not selected_policy:
+                            st.error("Please select a policy from the sidebar first.")
+                            st.stop()
+                        
+                        payload = {
+                            "query": query,
+                            "collection_name": selected_policy,
+                            "history": history_payload,
+                            "retrieve_top_k": ret_k,
+                            "rerank_top_k": rerank_k
+                        }
+                        res = requests.post(f"{API_BASE_URL}/api/v1/query/single", json=payload)
+                    else:
+                        if policy_a == policy_b:
+                            st.warning("Cannot compare a policy against itself.")
+                            st.stop()
+                        
+                        payload = {
+                            "query": query,
+                            "collection_a": policy_a,
+                            "collection_b": policy_b,
+                            "history": history_payload,
+                            "retrieve_top_k": ret_k,
+                            "rerank_top_k": rerank_k
+                        }
+                        res = requests.post(f"{API_BASE_URL}/api/v1/query/compare", json=payload)
+                    
+                    res.raise_for_status()
+                    answer = res.json()["data"]["markdown_report"]
+                    
+                    # 3. Display Assistant Response and Save to State
+                    st.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+
+                except Exception as e:
+                    st.error(f"Engine Error: {e}")
 
 # ===========================================================================
-# TAB 2: ADMIN DASHBOARD (Unchanged - Works perfectly)
+# TAB 2: ADMIN DASHBOARD (Management & Ingestion)
 # ===========================================================================
-# [Keep your exact Tab 2 Admin code here. It does not need any changes!]
 with tab_admin:
-    
-    # --- Authentication Check ---
-    if "admin_logged_in" not in st.session_state:
-        st.session_state.admin_logged_in = False
-
     if not st.session_state.admin_logged_in:
         st.markdown("### Admin Login Required")
         pwd = st.text_input("Enter Admin Password", type="password")
@@ -133,119 +156,74 @@ with tab_admin:
                 st.rerun()
             else:
                 st.error("Incorrect password.")
-    
-    # --- Authenticated Admin Area ---
     else:
-        col_title, col_logout = st.columns([4, 1])
-        with col_title:
-            st.markdown("### 🛠️ Database Management")
-        with col_logout:
-            if st.button("Logout"):
-                st.session_state.admin_logged_in = False
-                st.rerun()
+        st.markdown("### 🛠️ Database Management")
+        if st.button("Logout"):
+            st.session_state.admin_logged_in = False
+            st.rerun()
 
         st.divider()
 
-        # ---------------------------------------------------------
         # Section A: Existing Collections Manager
-        # ---------------------------------------------------------
         st.markdown("#### 📁 Current Document Collections")
-        
-        collections = client.list_collections()
-        
-        if not collections:
-            st.info("The database is currently empty. Add a document below.")
+        if not available_policies:
+            st.info("The database is currently empty.")
         else:
-            for c in collections:
-                # Streamlit layout tricks for a clean list with delete buttons
-                col_name, col_count, col_btn = st.columns([3, 2, 1])
-                with col_name:
-                    st.write(f"**{c.name}**")
-                with col_count:
-                    st.write(f"{c.count()} chunks indexed")
-                with col_btn:
-                    if st.button("Delete", key=f"del_{c.name}", type="primary"):
-                        client.delete_collection(c.name)
-                        st.success(f"Deleted collection: {c.name}")
-                        st.rerun()
+            for c_name in available_policies:
+                col_n, col_d = st.columns([4, 1])
+                with col_n:
+                    st.write(f"**{c_name}**")
+                with col_d:
+                    if st.button("Delete", key=f"del_{c_name}", type="primary"):
+                        try:
+                            res = requests.delete(f"{API_BASE_URL}/api/v1/admin/collections/{c_name}")
+                            res.raise_for_status()
+                            st.success(f"Deleted {c_name}")
+                            fetch_collections.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Delete failed: {e}")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # Section B: Ingestion Pipeline
-        # ---------------------------------------------------------
         st.markdown("#### 📥 Add New Document")
-        
-        # The key used to name the Chroma collection
-        doc_key = st.text_input("Collection Key (e.g., 'hdfc_optima_2025')").strip().lower()
-        
-        # Ensure the key uses valid characters for ChromaDB
-        if doc_key and not doc_key.replace("_", "").isalnum():
-            st.warning("Please use only alphanumeric characters and underscores for the key.")
-            doc_key = ""
-
+        doc_key = st.text_input("Collection Key (e.g., 'care_supreme_2024')").strip().lower()
         ingest_method = st.radio("Source Type", ["File Upload", "Web URL"], horizontal=True)
 
-        # Container to hold the dynamic input (File uploader or Text input)
-        input_container = st.container()
-        
         if st.button("Process & Index Document", type="primary", disabled=not doc_key):
-            target_collection = f"insurance_{doc_key}"
+            # Enforce naming convention
+            target_col = doc_key if doc_key.startswith("insurance_") else f"insurance_{doc_key}"
             
-            with st.spinner(f"Extracting and indexing into '{target_collection}'... This may take a minute."):
-                tmp_path = None
-                
+            with st.spinner("Extracting and indexing document..."):
                 try:
-                    # Handle File Upload
                     if ingest_method == "File Upload":
                         uploaded_file = st.session_state.get("file_uploader")
                         if not uploaded_file:
-                            st.error("Please select a file first.")
+                            st.error("Please upload a file.")
                             st.stop()
-                            
-                        # Save the Streamlit uploaded file to a temporary disk location
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                            tmp.write(uploaded_file.getvalue())
-                            tmp_path = tmp.name
-
-                    # Handle Web URL Download
-                    elif ingest_method == "Web URL":
-                        url = st.session_state.get("url_input")
-                        if not url:
-                            st.error("Please enter a valid URL.")
-                            st.stop()
-                            
-                        # Download the PDF to a temporary disk location
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                            with urllib.request.urlopen(req, timeout=60) as r:
-                                tmp.write(r.read())
-                            tmp_path = tmp.name
-
-                    # 🚀 Run Your Master Pipeline!
-                    if tmp_path:
-                        ExtractionPipeline(
-                            pdf_path=tmp_path,
-                            persist_dir=CHROMA_DIR,
-                            collection_name=target_collection,
-                            verbose=False # Keep the terminal clean
-                        ).run()
                         
-                        st.success(f"✅ Successfully indexed document into '{target_collection}'!")
-                        time.sleep(2) # Show the success message briefly before refreshing
-                        st.rerun()
-
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                        data = {"collection_name": target_col}
+                        res = requests.post(f"{API_BASE_URL}/api/v1/admin/ingest/file", files=files, data=data)
+                    else:
+                        url_val = st.session_state.get("url_input")
+                        if not url_val:
+                            st.error("Please enter a URL.")
+                            st.stop()
+                        
+                        payload = {"url": url_val, "collection_name": target_col}
+                        res = requests.post(f"{API_BASE_URL}/api/v1/admin/ingest/url", json=payload)
+                    
+                    res.raise_for_status()
+                    st.success("Indexing Complete!")
+                    fetch_collections.clear()
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"An error occurred during ingestion: {e}")
-                
-                finally:
-                    # Always clean up the temporary file
-                    if tmp_path and os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
+                    st.error(f"Ingestion failed: {e}")
 
-        # Place the inputs inside the container defined above (Streamlit layout flow)
-        with input_container:
-            if ingest_method == "File Upload":
-                st.file_uploader("Upload PDF Policy", type=["pdf"], key="file_uploader")
-            else:
-                st.text_input("Direct PDF URL", key="url_input")
+        # Input placements
+        if ingest_method == "File Upload":
+            st.file_uploader("Upload PDF Policy", type=["pdf"], key="file_uploader")
+        else:
+            st.text_input("Direct PDF URL", key="url_input")

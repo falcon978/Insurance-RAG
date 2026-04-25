@@ -1,13 +1,14 @@
 """
 rag/retriever.py
 ----------------
-Handles document retrieval (Semantic, Lexical, Hybrid).
-Reranking has been decoupled into rerankers.py.
+Executes Hybrid Search by orchestrating Vector and Lexical retrievers.
+This version is decoupled from the Vector DB's internal storage and 
+relies on a pre-initialized BM25 retriever for high-speed lexical search.
 """
 
 import logging
-from typing import List
-from langchain_chroma import Chroma
+from typing import List, Optional
+from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableParallel, RunnableLambda
@@ -15,56 +16,67 @@ from langchain_core.runnables import RunnableParallel, RunnableLambda
 logger = logging.getLogger(__name__)
 
 class DocumentSearch:
-    def __init__(self, vector_store: Chroma, strategy: str = "hybrid", top_k: int = 15):
+    def __init__(
+        self, 
+        vector_store: VectorStore, 
+        bm25_retriever: Optional[BM25Retriever] = None, 
+        strategy: str = "hybrid", 
+        top_k: int = 15
+    ):
+        """
+        Initializes the search engine with a provider-agnostic vector store 
+        and an optional lexical retriever.
+        
+        Args:
+            vector_store: Any LangChain VectorStore (Chroma, Pinecone, etc.).
+            bm25_retriever: A pre-built BM25 retriever cached by the Engine.
+            strategy: 'hybrid' or 'semantic'.
+            top_k: Number of documents to retrieve in the broad pool.
+        """
         self.vector_store = vector_store
+        self.bm25_retriever = bm25_retriever
         self.strategy = strategy.lower()
         self.top_k = top_k
         self.retriever = self._initialize_strategy()
 
     def _build_semantic_retriever(self):
+        """Standard vector-based retrieval."""
         return self.vector_store.as_retriever(search_kwargs={"k": self.top_k})
 
-    def _build_bm25_retriever(self):
-        db_data = self.vector_store.get()
-        docs = [
-            Document(page_content=txt, metadata=meta) 
-            for txt, meta in zip(db_data['documents'], db_data['metadatas'])
-        ]
-        if not docs: 
-            return None
-            
-        bm25_retriever = BM25Retriever.from_documents(docs)
-        bm25_retriever.k = self.top_k
-        return bm25_retriever
-
     def _build_hybrid_retriever(self):
+        """
+        Combines Semantic and Lexical results using Reciprocal Rank Fusion (RRF).
+        If no BM25 retriever is available, it gracefully falls back to Semantic.
+        """
         semantic_retriever = self._build_semantic_retriever()
-        bm25_retriever = self._build_bm25_retriever()
         
-        if not bm25_retriever:
+        if not self.bm25_retriever:
+            logger.warning("Hybrid search requested but BM25 index is missing. Falling back to Semantic.")
             return semantic_retriever
 
-        # 1. Run both retrievers in parallel asynchronously
+        # Synchronize top_k for both retrieval branches
+        self.bm25_retriever.k = self.top_k
+
+        # 1. Run retrievers in parallel
         parallel_retrieval = RunnableParallel(
             semantic=semantic_retriever,
-            bm25=bm25_retriever
+            bm25=self.bm25_retriever
         )
 
         # 2. Custom Reciprocal Rank Fusion (RRF) Logic
         def reciprocal_rank_fusion(results: dict) -> List[Document]:
             """
-            Takes the results from Semantic and BM25, applies RRF math, 
-            and returns a single deduplicated, reranked list of documents.
+            Deduplicates and re-scores documents using RRF from both retrieval streams.
             """
             fused_scores = {}
-            # We apply slight weights to favor semantic meaning over exact keyword matching
+            # Weights favor semantic meaning slightly over exact keyword matches
             weights = {"semantic": 0.7, "bm25": 0.3}
-            k_constant = 60 # Standard constant used in RRF algorithms
+            k_constant = 60 # Standard RRF smoothing constant
 
             for strategy_name, docs in results.items():
                 weight = weights[strategy_name]
                 for rank, doc in enumerate(docs, start=1):
-                    # Use page_content as a unique ID to deduplicate chunks found by both algorithms
+                    # Use page_content as a unique ID to deduplicate chunks
                     doc_id = doc.page_content 
                     
                     if doc_id not in fused_scores:
@@ -73,23 +85,24 @@ class DocumentSearch:
                     # RRF Formula: weight * (1 / (k + rank))
                     fused_scores[doc_id]["score"] += weight * (1.0 / (k_constant + rank))
 
-            # Sort the dictionary by the fused score descending
+            # Sort by fused score descending
             reranked_docs = sorted(fused_scores.values(), key=lambda x: x["score"], reverse=True)
             
-            # Return just the Document objects, sliced to top_k
+            # Return top_k unique documents
             return [item["doc"] for item in reranked_docs[:self.top_k]]
 
-        # 3. Pipe them together using LCEL
-        hybrid_chain = parallel_retrieval | RunnableLambda(reciprocal_rank_fusion)
-        return hybrid_chain
+        # Pipe the components using LCEL
+        return parallel_retrieval | RunnableLambda(reciprocal_rank_fusion)
 
     def _initialize_strategy(self):
+        """Selects the retrieval chain based on the chosen strategy."""
         if self.strategy == "semantic": 
             return self._build_semantic_retriever()
-        elif self.strategy == "bm25": 
-            return self._build_bm25_retriever() or self._build_semantic_retriever()
+        elif self.strategy == "bm25" and self.bm25_retriever: 
+            return self.bm25_retriever()
         else: 
             return self._build_hybrid_retriever()
 
     def search(self, query: str) -> List[Document]:
+        """Invokes the retrieval pipeline."""
         return self.retriever.invoke(query)

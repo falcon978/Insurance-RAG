@@ -2,12 +2,30 @@
 engine.py
 ---------
 The central orchestrator for the Insurance RAG pipeline. 
+
+It manages:
+1. Provider-Agnostic Vector DB connections (Chroma or Pinecone).
+2. Efficient BM25 Index Caching.
+3. The 3-Step RAG Pipeline: Hybrid Retrieval -> Reranking -> Adjudication.
+4. Stateful conversational memory with a sliding window
 """
 
+import os
+import pickle
 import logging
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from typing import List, Optional
 
+from langchain_chroma import Chroma
+try:
+    from langchain_pinecone import PineconeVectorStore
+except ImportError:
+    PineconeVectorStore = None
+
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.retrievers import BM25Retriever
+
+# Internal Module Imports
+from config import settings
 from rag.retriever import DocumentSearch
 from rag.rerankers import ContextReranker
 from rag.generator import ResponseGenerator
@@ -15,69 +33,133 @@ from rag.generator import ResponseGenerator
 logger = logging.getLogger(__name__)
 
 class InsuranceRAGEngine:
-    def __init__(self, gemini_api_key: str, chroma_dir: str = "./chroma_data"):
-        logger.info("Booting up shared RAG Engine components...")
-        self.chroma_dir = chroma_dir
+    def __init__(self, gemini_api_key: str):
+        """
+        Initializes the engine with shared components and an empty BM25 cache.
+        """
+        logger.info(f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()})")
         
-        # Initialize Shared Models
+        # 1. Initialize Shared Models
         self.embeddings = HuggingFaceEmbeddings(
             model_name="BAAI/bge-large-en-v1.5",
-            model_kwargs={'device': 'cpu'}, 
+            model_kwargs={'device': settings.hf_device}, 
             encode_kwargs={'normalize_embeddings': True}
         )
-        self.reranker = ContextReranker(device="cpu")
+        self.reranker = ContextReranker(device=settings.hf_device)
         self.generator = ResponseGenerator(api_key=gemini_api_key)
+        
+        # Cache to store BM25 index in memory to avoid rebuilding every query
+        self._bm25_cache = {}
 
-    # FIX: Expose retrieve_top_k here so it gets passed to the retriever
+    def _load_bm25_retriever(self, collection_name: str) -> Optional[BM25Retriever]:
+        """Loads the local text corpus for the BM25 lexical search branch."""
+        if collection_name in self._bm25_cache:
+            return self._bm25_cache[collection_name]
+
+        # Lexical corpus is always local for low-latency keyword search
+        corpus_path = os.path.join(settings.chroma_dir, collection_name, "bm25_corpus.pkl")
+        
+        if not os.path.exists(corpus_path):
+            logger.warning(f"BM25 corpus missing at {corpus_path}. Performance may degrade.")
+            return None
+
+        try:
+            with open(corpus_path, "rb") as f:
+                docs = pickle.load(f)
+            
+            # Initializing BM25 is CPU-intensive; we do this once per policy
+            retriever = BM25Retriever.from_documents(docs)
+            self._bm25_cache[collection_name] = retriever
+            logger.info(f"Loaded BM25 index for {collection_name} into cache.")
+            return retriever
+        except Exception as e:
+            logger.error(f"Failed to initialize BM25 index: {e}")
+            return None
+
     def _get_search_engine(self, collection_name: str, retrieve_top_k: int) -> DocumentSearch:
-        """Dynamically connects to a Chroma collection and returns a Hybrid Search engine."""
-        vector_store = Chroma(
-            collection_name=collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=self.chroma_dir
+        """Factory method to connect to the configured Vector DB (Chroma or Pinecone)."""
+        if settings.vector_db_type == "pinecone":
+            vector_store = PineconeVectorStore(
+                index_name=settings.pinecone_index_name,
+                embedding=self.embeddings,
+                namespace=collection_name,
+                pinecone_api_key=settings.pinecone_api_key
+            )
+        else:
+            vector_store = Chroma(
+                collection_name=collection_name,
+                embedding_function=self.embeddings,
+                persist_directory=settings.chroma_dir
+            )
+        
+        # Fetch the local BM25 retriever
+        bm25_retriever = self._load_bm25_retriever(collection_name)
+        
+        return DocumentSearch(
+            vector_store=vector_store, 
+            bm25_retriever=bm25_retriever, 
+            strategy="hybrid", 
+            top_k=retrieve_top_k
         )
-        return DocumentSearch(vector_store, strategy="hybrid", top_k=retrieve_top_k)
 
     def _format_policy_name(self, collection_name: str) -> str:
-        clean_name = collection_name.replace("insurance_", "").replace("_", " ")
-        return clean_name.title()
+        """Converts raw keys (e.g. 'insurance_hdfc_ergo') to clean titles."""
+        return collection_name.replace("insurance_", "").replace("_", " ").title()
 
-    # FIX: Expose retrieve_top_k and rerank_top_k as arguments
-    def query_single_policy(self, query: str, collection_name: str, retrieve_top_k: int = 15, rerank_top_k: int = 3) -> str:
-        """Runs the 3-step pipeline for a dynamically selected policy."""
-        logger.info(f"Processing single policy query for: {collection_name}")
+    def query_single_policy(
+        self, 
+        query: str, 
+        collection_name: str, 
+        history: Optional[List] = None, 
+        max_history_len: int = 6, # Keeps last 3 Human-AI turns
+        **kwargs
+    ) -> str:
+        """3-Step Stateful Pipeline: Retrieve -> Rerank -> Generate with Sliding Window Memory."""
         
-        # Pass retrieve_top_k to the engine builder
-        search_engine = self._get_search_engine(collection_name, retrieve_top_k)
-        policy_name = self._format_policy_name(collection_name)
+        # SLIDING WINDOW: Trim history before sending to the LLM
+        active_history = (history[-max_history_len:] if history else [])
         
-        # 1. Broad Retrieval
+        search_engine = self._get_search_engine(collection_name, kwargs.get('retrieve_top_k', 15))
+        
+        # 1. Hybrid Retrieval
         broad_docs = search_engine.search(query)
-        # 2. Reranking (Pass rerank_top_k)
-        best_docs = self.reranker.rerank(query, broad_docs, top_k=rerank_top_k)
-        # 3. Generation
-        return self.generator.generate_single_answer(query, best_docs, policy_name)
+        
+        # 2. Reranking
+        best_docs = self.reranker.rerank(query, broad_docs, top_k=kwargs.get('rerank_top_k', 3))
+        
+        # 3. Two-Pass Generation with Trimmed History
+        return self.generator.generate_single_answer(
+            query=query, 
+            docs=best_docs, 
+            policy_name=self._format_policy_name(collection_name),
+            history=active_history
+        )
 
-    # FIX: Expose retrieve_top_k and rerank_top_k as arguments
-    def compare_policies(self, query: str, collection_a: str, collection_b: str, retrieve_top_k: int = 15, rerank_top_k: int = 3) -> str:
-        """Runs the pipeline simultaneously across two dynamically selected policies."""
-        logger.info(f"Processing comparison: {collection_a} vs {collection_b}")
+    def compare_policies(
+        self, 
+        query: str, 
+        collection_a: str, 
+        collection_b: str, 
+        history: Optional[List] = None, 
+        max_history_len: int = 4,
+        **kwargs
+    ) -> str:
+        """Runs the comparison pipeline with conversational state."""
         
-        # Pass retrieve_top_k to both engines
-        engine_a = self._get_search_engine(collection_a, retrieve_top_k)
-        engine_b = self._get_search_engine(collection_b, retrieve_top_k)
+        active_history = (history[-max_history_len:] if history else [])
         
-        # Retrieve & Rerank A
-        broad_a = engine_a.search(query)
-        best_a = self.reranker.rerank(query, broad_a, top_k=rerank_top_k)
+        eng_a = self._get_search_engine(collection_a, kwargs.get('retrieve_top_k', 15))
+        eng_b = self._get_search_engine(collection_b, kwargs.get('retrieve_top_k', 15))
         
-        # Retrieve & Rerank B
-        broad_b = engine_b.search(query)
-        best_b = self.reranker.rerank(query, broad_b, top_k=rerank_top_k)
+        # Process Policy A
+        best_a = self.reranker.rerank(query, eng_a.search(query), top_k=kwargs.get('rerank_top_k', 3))
+        # Process Policy B
+        best_b = self.reranker.rerank(query, eng_b.search(query), top_k=kwargs.get('rerank_top_k', 3))
         
-        # Generate
+        # Generate Comparative Decision
         return self.generator.generate_comparison(
             query=query, 
-            docs_a=best_a, policy_name_a=self._format_policy_name(collection_a),
-            docs_b=best_b, policy_name_b=self._format_policy_name(collection_b)
+            docs_a=best_a, name_a=self._format_policy_name(collection_a),
+            docs_b=best_b, name_b=self._format_policy_name(collection_b),
+            history=active_history
         )

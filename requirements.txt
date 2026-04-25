@@ -1,10 +1,30 @@
-streamlit==1.32.0
-langchain==0.1.13
-langchain-chroma==0.1.0
-langchain-huggingface==0.0.1
-langchain-google-genai==1.0.3
-sentence-transformers==2.6.1
-chromadb==0.4.24
-rank-bm25==0.2.2
-pydantic-settings==2.2.1
-pymupdf4llm==0.0.4
+# Web & API
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+streamlit>=1.32.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+requests>=2.31.0
+
+# LLM & LangChain Framework
+langchain>=0.1.13
+langchain-core>=0.1.33
+langchain-community>=0.0.28
+langchain-google-genai>=1.0.1
+langchain-huggingface>=0.0.1
+
+# Vector Databases
+chromadb>=0.4.24
+pinecone-client>=3.1.0
+langchain-pinecone>=0.1.0
+
+# Retrieval & Reranking
+rank-bm25>=0.2.2
+sentence-transformers>=2.6.0
+cross-encoder>=0.0.1
+
+# Extraction & Processing
+pymupdf4llm>=0.0.4
+fitz>=0.0.1.dev2
+tiktoken>=0.6.0
