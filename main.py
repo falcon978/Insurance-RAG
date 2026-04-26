@@ -91,10 +91,10 @@ def delete_collection(collection_name: str):
             client = chromadb.PersistentClient(path=settings.chroma_dir)
             client.delete_collection(collection_name)
         
-        # Also clean up the local BM25 pickle
-        bm25_path = os.path.join(settings.chroma_dir, collection_name)
+        # Also clean up the local BM25 pickle from the new dedicated directory
+        bm25_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
         if os.path.exists(bm25_path):
-            shutil.rmtree(bm25_path)
+            os.remove(bm25_path) # Uses os.remove because it is a file, not a directory
             
         return StandardResponse(status="success", message=f"Collection {collection_name} deleted")
     except Exception as e:

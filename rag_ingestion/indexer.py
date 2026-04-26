@@ -75,9 +75,10 @@ class PolicyVectorStore:
 
     def _get_bm25_path(self) -> str:
         """Returns the stable path for the local BM25 document corpus."""
-        folder = os.path.join(settings.chroma_dir, self.collection_name)
-        os.makedirs(folder, exist_ok=True)
-        return os.path.join(folder, "bm25_corpus.pkl")
+        # Use the dedicated BM25 directory
+        os.makedirs(settings.bm25_dir, exist_ok=True)
+        # Create a specific pickle file for this collection
+        return os.path.join(settings.bm25_dir, f"{self.collection_name}_bm25.pkl")
 
     def index_chunks(self, chunks: List[PolicyChunk], batch_size: int = 100):
         """
@@ -125,8 +126,18 @@ class PolicyVectorStore:
         # B. Decoupled BM25 Corpus Persistence
         bm25_path = self._get_bm25_path()
         try:
+            # 1. Load existing corpus if it exists to prevent overwriting previous PDFs
+            existing_documents = []
+            if os.path.exists(bm25_path):
+                with open(bm25_path, "rb") as f:
+                    existing_documents = pickle.load(f)
+            
+            # 2. Append new documents
+            existing_documents.extend(documents)
+
+            # 3. Save combined corpus
             with open(bm25_path, "wb") as f:
-                pickle.dump(documents, f)
+                pickle.dump(existing_documents, f)
             logging.info(f"Lexical corpus persisted for local BM25 search at: {bm25_path}")
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")

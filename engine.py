@@ -57,7 +57,7 @@ class InsuranceRAGEngine:
             return self._bm25_cache[collection_name]
 
         # Lexical corpus is always local for low-latency keyword search
-        corpus_path = os.path.join(settings.chroma_dir, collection_name, "bm25_corpus.pkl")
+        corpus_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
         
         if not os.path.exists(corpus_path):
             logger.warning(f"BM25 corpus missing at {corpus_path}. Performance may degrade.")
