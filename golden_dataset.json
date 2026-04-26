@@ -1,0 +1,1096 @@
+[
+    {
+        "id": 1,
+        "query": "I have been using the HDFC Ergo Optima Secure policy for 14 months. I need to undergo a surgery for a stone in my kidney. Is this covered under my current policy period?",
+        "category": "waiting_period",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS - 1. b. Specified Disease/Procedure waiting period: Code - Excl02"
+        ],
+        "expected_keywords": [
+            "24 months",
+            "Kidney stone",
+            "Excl02"
+        ],
+        "expected_span_hint": [
+            "expiry of 24 months",
+            "calculus diseases of Urogenital system e.g.Kidney stone"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "Expenses related to the treatment of the listed Conditions, surgeries/treatments shall be excluded until the expiry of 24 months of continuous coverage after the date of inception of the first Policy with us. ... calculus diseases of Urogenital system e.g.Kidney stone, Urinary Bladder Stone"
+        ],
+        "reasoning_path": "Kidney stone treatment is a covered hospitalization expense, but is subject to a 24-month specified disease waiting period (Code-Excl02) which has not yet elapsed."
+    },
+    {
+        "id": 2,
+        "query": "Under Care Supreme, if I have a 5 Lakh base Sum Insured and I make a claim of 3 Lakhs in the first year, what happens to my Cumulative Bonus at the time of renewal?",
+        "category": "financial_constraints",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
+            "3.1. BASE BENEFITS - 3.1.3 Benefit: Cumulative Bonus"
+        ],
+        "expected_keywords": [
+            "50% flat",
+            "no impact",
+            "accrual"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "In the event of a Claim there is no impact on the accrual of Cumulative Bonus"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "At the end of each Policy Year, the Company will enhance the Sum Insured by 50% flat, on a cumulative basis, as a Cumulative Bonus for each completed and continuous Policy Year... (vi) In the event of a Claim there is no impact on the accrual of Cumulative Bonus."
+        ],
+        "reasoning_path": "The Cumulative Bonus enhancement (50% flat) is a financial benefit that remains unaffected by claims made during the policy year per Clause 3.1.3(vi)."
+    },
+    {
+        "id": 3,
+        "query": "Which policy allows for treatment at home (Home Health Care or Domiciliary) even if there is no shortage of hospital beds, provided it is prescribed by a doctor?",
+        "category": "comparison",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 2.1.14. Domiciliary Hospitalization",
+            "HDFC Optima Secure: SECTION B. BENEFITS - 1.2. Home Health Care"
+        ],
+        "expected_keywords": [
+            "non-availability of room",
+            "Home Health Care"
+        ],
+        "expected_span_hint": [
+            "on account of non-availability of room",
+            "if prescribed in writing by the treating Medical Practitioner"
+        ],
+        "comparison_focus": "coverage",
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "Domiciliary Hospitalization means medical treatment... taken while confined at home under any of the following circumstances:... b. The patient takes treatment at home on account of non-availability of room in a Hospital.",
+            "The Company shall indemnify the Medical Expenses incurred by the Insured Person on availing treatment at Home during the Policy Year, if prescribed in writing by the treating Medical Practitioner, provided that: a. The treatment in normal course would require In-patient Care at a Hospital"
+        ],
+        "reasoning_path": "Care Supreme requires a shortage of beds (non-availability of room) for home-based coverage, while HDFC Optima Secure allows it based on a doctor's written prescription alone."
+    },
+    {
+        "id": 4,
+        "query": "Does HDFC Optima Secure cover bariatric surgery for a 30-year-old insured person with a BMI of 37 and uncontrolled Type 2 Diabetes?",
+        "category": "exclusions",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS - 2. c. Obesity/Weight control: Code - Excl06"
+        ],
+        "expected_keywords": [
+            "Excl06",
+            "BMI",
+            "35",
+            "Type2 diabetes"
+        ],
+        "expected_span_hint": [
+            "indemnify Medical Expenses necessarily incurred",
+            "greater than or equal to 35 in conjunction with any of the following"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "Expenses related to the surgical treatment of obesity that does not fulfil all the below conditions:... iii. The member has to be 18 years of age or older and iv. Body Mass Index (BMI) A. greater than or equal to 40 or B. greater than or equal to 35 in conjunction with any of the following severe co-morbidities... 4) Uncontrolled type2 diabetes"
+        ],
+        "reasoning_path": "Bariatric surgery is covered as the patient meets the specific criteria under Code-Excl06, including age, BMI threshold, and the presence of a qualifying co-morbidity."
+    },
+    {
+        "id": 5,
+        "query": "I am traveling and need an emergency appendectomy outside India. I have the standard Care Supreme policy. Will my expenses be covered?",
+        "category": "coverage",
+        "difficulty": "easy",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
+            "6.1.7. Payment Terms"
+        ],
+        "expected_keywords": [
+            "entirely within India",
+            "Indian Rupees"
+        ],
+        "expected_span_hint": [
+            "provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "covers only medical treatment taken entirely within India"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "(a) This Policy covers only medical treatment taken entirely within India. All payments under this Policy shall be made in Indian Rupees and within India."
+        ],
+        "reasoning_path": "While hospitalization is a base benefit, it is geographically restricted by Clause 6.1.7(a) to medical treatment taken entirely within India."
+    },
+    {
+        "id": 6,
+        "query": "I have HDFC Optima Secure with a 20 Lakh Sum Insured and a 50,000 Aggregate Deductible. If I have two hospitalizations costing 30,000 and 40,000 respectively, how much will the insurer pay for the second claim?",
+        "category": "financial_constraints",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION B. BENEFITS - 2.7. Aggregate Deductible"
+        ],
+        "expected_keywords": [
+            "Aggregate Deductible",
+            "exhausted",
+            "once in a Policy Year"
+        ],
+        "expected_span_hint": [
+            "indemnify Medical Expenses necessarily incurred",
+            "bear a self-opted amount known as 'Aggregate Deductible' once during each Policy Year"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "The Insured agrees to bear a self-opted amount known as 'Aggregate Deductible' once during each Policy Year post which the Insurer's liability under the Policy shall commence for that Policy Year. ... The Aggregate deductible limit can be exhausted by providing any invoices and relevant proof of one or more hospitalizations"
+        ],
+        "reasoning_path": "The aggregate deductible must be satisfied once per policy year across all hospitalizations before the insurer becomes liable for subsequent hospitalization expenses."
+    },
+    {
+        "id": 7,
+        "query": "If I am hospitalized for a robotic surgery to treat a condition, does the Care Supreme policy cover this as a standard benefit?",
+        "category": "coverage",
+        "difficulty": "easy",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses - (iii) Advance Technology Methods"
+        ],
+        "expected_keywords": [
+            "Robotic surgeries",
+            "indemnify"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "treatment taken through following advance technology methods... G. Robotic surgeries"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "The Company will indemnify the Insured Person up to the Sum Insured... for expenses incurred under Benefit 'Hospitalization expenses' for treatment taken through following advance technology methods:... G. Robotic surgeries"
+        ],
+        "reasoning_path": "Robotic surgery is an admissible hospitalization expense as it is explicitly categorized under the Advance Technology Methods benefit (3.1.1.iii)."
+    },
+    {
+        "id": 8,
+        "query": "What is the specific timeframe required for notifying the insurer in case of a planned hospitalization under both Care Supreme and HDFC Optima Secure?",
+        "category": "comparison",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 6.1.4. Claims Intimation",
+            "HDFC Optima Secure: SECTION E. OTHER TERMS AND CLAUSES - 1.1. Notification of a Claim"
+        ],
+        "expected_keywords": [
+            "48 hours",
+            "prior to admission"
+        ],
+        "expected_span_hint": [
+            "at least 48 hours prior to planned date of admission",
+            "At least 48 hours prior to admission in Hospital"
+        ],
+        "comparison_focus": "claims",
+        "answer_type": "positive",
+        "expected_snippet": [
+            "(v) In case of an Planned Hospitalization, the Company shall be notified... at least 48 hours prior to planned date of admission to Hospital",
+            "b. At least 48 hours prior to admission in Hospital in case of a planned Hospitalization"
+        ],
+        "reasoning_path": "Both policies mandate that the insurer must be notified at least 48 hours in advance of any planned hospital admission."
+    },
+    {
+        "id": 9,
+        "query": "Is treatment for 'Mental Retardation' covered under the Care Supreme policy?",
+        "category": "exclusions",
+        "difficulty": "easy",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
+            "4.2. Specific Exclusions"
+        ],
+        "expected_keywords": [
+            "Mental retardation",
+            "not be admissible"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "8. Treatment of mental retardation, arrested or incomplete development of mind"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "Any Claim of an Insured Person arising due to any of the following shall not be admissible... 8. Treatment of mental retardation, arrested or incomplete development of mind of a person, subnormal intelligence or mental intellectual disability."
+        ],
+        "reasoning_path": "While general hospitalization is covered, claims arising from the treatment of mental retardation are specifically excluded under Clause 4.2(8)."
+    },
+    {
+        "id": 10,
+        "query": "I am opting for the 'Home Health Care' benefit in HDFC Optima Secure. Can I choose any doctor and then submit the bills for reimbursement later?",
+        "category": "claims",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.2. Home Health Care",
+            "SECTION B. BENEFITS - 1.2. Home Health Care"
+        ],
+        "expected_keywords": [
+            "pre-authorized",
+            "reimbursement basis"
+        ],
+        "expected_span_hint": [
+            "if prescribed in writing by the treating Medical Practitioner",
+            "This Cover is not available on reimbursement basis"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company shall indemnify the Medical Expenses incurred by the Insured Person on availing treatment at Home during the Policy Year, if prescribed in writing by the treating Medical Practitioner, provided that: a. The treatment in normal course would require In-patient Care at a Hospital",
+            "The Company shall indemnify the Medical Expenses incurred... provided that:... b. The treatment is pre-authorized by the Company... This Cover is not available on reimbursement basis."
+        ],
+        "reasoning_path": "The Home Health Care benefit permits home treatment upon medical prescription but strictly requires pre-authorization and excludes any reimbursement-based claims."
+    },
+    {
+        "id": 11,
+        "query": "I am in the 18th month of my Care Supreme policy and need surgery for a Cataract. Will the policy pay for this hospitalization?",
+        "category": "waiting_period",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
+            "4.1. Standard Exclusions: (a) Waiting Periods: (ii) Named Ailment Waiting Period: Code-Excl02"
+        ],
+        "expected_keywords": [
+            "24 months",
+            "Cataract",
+            "indemnify"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "expiry of 24 months of continuous coverage"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours and was prescribed in writing, by a Medical Practitioner",
+            "Expenses related to the treatment of the listed Conditions, surgeries/ treatments shall be excluded until the expiry of 24 months of continuous coverage, as may be the case after the date of inception of the first policy with the Company. ... 4. Cataract"
+        ],
+        "reasoning_path": "While In-patient Care is a base benefit, the surgery is not payable because Cataract treatment is subject to a 24-month waiting period (Code-Excl02) and the policy is only in its 18th month."
+    },
+    {
+        "id": 12,
+        "query": "If I am hospitalized for dental surgery due to an accident only 10 days after starting my HDFC Optima Secure policy, can I claim the expenses?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1.1. ii. In patient Care Dental Treatment",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS - 1. c. 30-day waiting period: Code - Excl03"
+        ],
+        "expected_keywords": [
+            "except claims arising due to an accident",
+            "Dental Treatment",
+            "Injury"
+        ],
+        "expected_span_hint": [
+            "necessitated due to disease or Injury",
+            "except claims arising due to an accident, provided the same are covered"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "In patient Care Dental Treatment, necessitated due to disease or Injury",
+            "Expenses related to the treatment of any illness within 30 days from the first Policy commencement date shall be excluded except claims arising due to an accident, provided the same are covered."
+        ],
+        "reasoning_path": "Dental treatment necessitated by injury is permitted under Base Benefits, and the 30-day waiting period (Code-Excl03) contains an explicit exception for accident-related claims."
+    },
+    {
+        "id": 13,
+        "query": "Compare the standard waiting period for Pre-Existing Diseases between HDFC Optima Secure and Care Supreme.",
+        "category": "comparison",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 4.1. Standard Exclusions: (a) Waiting Periods: (i) Pre-Existing Diseases: Code- Excl01",
+            "HDFC Optima Secure: SECTION C. WAITING PERIOD AND EXCLUSIONS - 1. a. Pre-Existing Diseases: Code - Excl01"
+        ],
+        "expected_keywords": [
+            "36 months",
+            "PED",
+            "continuous coverage"
+        ],
+        "expected_span_hint": [
+            "expiry of 36 months of continuous coverage",
+            "until the expiry of 36 months... of continuous coverage"
+        ],
+        "comparison_focus": "waiting_period",
+        "answer_type": "positive",
+        "expected_snippet": [
+            "Expenses related to the treatment of a pre-existing Disease (PED) and its direct complications shall be excluded until the expiry of 36 months of continuous coverage after the date of inception of the first policy with insurer.",
+            "Expenses related to the treatment of a pre-existing disease (PED) and its direct complications shall be excluded until the expiry of 36 months (Unless specified otherwise in the Policy Schedule) of continuous coverage after the date of inception of the first policy with insurer."
+        ],
+        "reasoning_path": "Both policies define a standard 36-month waiting period for treatment related to Pre-existing Diseases (Code-Excl01) from the date of policy inception."
+    },
+    {
+        "id": 14,
+        "query": "I require plastic surgery for reconstruction following a major burn accident. Is this covered under the Care Supreme policy?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
+            "4.1. Standard Exclusions - (b) Permanent Exclusions: 5. Cosmetic or plastic Surgery: (Code-Exc108)"
+        ],
+        "expected_keywords": [
+            "reconstruction",
+            "Burn(s)",
+            "Accident"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "unless for reconstruction following an Accident, Burn(s) or Cancer"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "Expenses for cosmetic or plastic surgery or any treatment to change appearance unless for reconstruction following an Accident, Burn(s) or Cancer or as part of medically necessary treatment to remove a direct and immediate health risk to the insured."
+        ],
+        "reasoning_path": "While plastic surgery is generally excluded under Code-Exc108, the clause provides a specific exception for reconstruction necessitated by an accident or burns."
+    },
+    {
+        "id": 15,
+        "query": "In HDFC Optima Secure, if I choose a hospital room that costs more than my eligible Single Private Room limit, will my surgeon's fees be paid in full?",
+        "category": "financial_constraints",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION B. BENEFITS - 1.1.1. Note iii. Proportionate deduction on Room Rent"
+        ],
+        "expected_keywords": [
+            "Proportionate deduction",
+            "Associated Medical Expenses",
+            "Surgeon"
+        ],
+        "expected_span_hint": [
+            "Surgeon, anaesthetist, Medical Practitioner, consultants, specialist Fees",
+            "same proportion as the admissible rate per day bears to the actual rate per day"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury... for: c. Surgeon, anaesthetist, Medical Practitioner, consultants, specialist Fees during Hospitalization forming part of Hospital bill.",
+            "In case the Insured Person is admitted in a room that exceeds the category/limit stipulated in the Policy Schedule, the reimbursement/payment of Room Rent charges including all Associated Medical Expenses incurred at Hospital shall be effected in the same proportion as the admissible rate per day bears to the actual rate per day of Room Rent charges."
+        ],
+        "reasoning_path": "Surgeon fees are covered as a base benefit, but the policy applies a proportionate deduction to all 'Associated Medical Expenses' if the insured chooses a room category higher than their eligibility."
+    },
+    {
+        "id": 16,
+        "query": "What is the maximum number of days I have to submit my reimbursement claim documents after being discharged from the hospital under Care Supreme?",
+        "category": "claims",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "6. OTHER TERMS AND CLAUSES - 6.1. Claims procedure and management",
+            "6.1.4. Claims Intimation (ii)"
+        ],
+        "expected_keywords": [
+            "30 days",
+            "discharge from the hospital",
+            "Condition Precedent"
+        ],
+        "expected_span_hint": [
+            "procedures involved to file a valid Claim",
+            "within 30 days from the date of discharge"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "6.1. Claims procedure and management: This section explains about procedures involved to file a valid Claim by the Insured Person and related processes involved to manage the Claim by the Company.",
+            "(ii) Claim must be filed within 30 days from the date of discharge from the hospital in case of hospitalization and actual date of loss in case of non-hospitalization Benefits."
+        ],
+        "reasoning_path": "Claims management procedures dictate that for a valid reimbursement claim, documents must be filed within 30 days of the discharge date as per Clause 6.1.4(ii)."
+    },
+    {
+        "id": 17,
+        "query": "Can my son, who is turning 26 this month and is financially independent, continue to be covered as a dependent child under my HDFC Optima Secure policy?",
+        "category": "edge_case",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "Operating Clause",
+            "SECTION A. DEFINITIONS - 1.2. Specific Definitions: Def. 13. Family Members"
+        ],
+        "expected_keywords": [
+            "Age 25 years",
+            "financially independent",
+            "ineligible"
+        ],
+        "expected_span_hint": [
+            "cover the person(s) named in the Policy Schedule",
+            "child above 18 years of Age is financially independent, he or she shall be ineligible"
+        ],
+        "answer_type": "negative",
+        "comparison_focus": null,
+        "expected_snippet": [
+            "If during the Policy Period the Insured Person is required to be Hospitalized... the Company shall indemnify Medical Expenses necessarily incurred towards the Covers in force under the Policy, as specified in the Policy Schedule. ... references to the male includes the female and references to any statutory enactment includes subsequent changes to the same.",
+            "iii. Dependent Children (i.e. natural or legally adopted) between the Age 90 days to Age 25 years. If the child above 18 years of Age is financially independent, he or she shall be ineligible for coverage under this Policy in the subsequent renewals."
+        ],
+        "reasoning_path": "The Operating Clause limits coverage to eligible insured persons; the son is no longer eligible as he has exceeded the maximum dependent age (25) and is financially independent."
+    },
+    {
+        "id": 18,
+        "query": "How do the policies compare regarding the maximum amount they will pay for AYUSH Inpatient treatments?",
+        "category": "comparison",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (vi) Benefit: AYUSH Treatment",
+            "HDFC Optima Secure: SECTION B. BENEFITS - 1.4. AYUSH Treatment"
+        ],
+        "expected_keywords": [
+            "up to the Sum Insured",
+            "Sub-limit",
+            "AYUSH Hospital"
+        ],
+        "expected_span_hint": [
+            "up to the Sum Insured, as specified in the Policy Schedule",
+            "up to the Sub-limit specified against this Cover in the Policy Schedule"
+        ],
+        "comparison_focus": "financial_constraints",
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person, through Cashless or Reimbursement Facility, up to the Sum Insured, as specified in the Policy Schedule, towards Medical Expenses incurred with respect to the Insured Person's medical treatment undergone at any AYUSH Hospitals",
+            "The Company shall indemnify the Medical Expenses incurred by the Insured Person only for Inpatient Care under Ayurveda, Yoga and Naturopathy, Unani, Siddha and Homeopathy systems of medicines during each Policy Year up to the Sub-limit specified against this Cover in the Policy Schedule, in any AYUSH Hospital."
+        ],
+        "reasoning_path": "Care Supreme permits AYUSH treatment up to the full Sum Insured, while HDFC Optima Secure restricts the benefit to a specific sub-limit defined in the Policy Schedule."
+    },
+    {
+        "id": 19,
+        "query": "Is there an exclusion for treatment required due to a 'Nuclear attack' in both policies?",
+        "category": "comparison",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 4.2. Specific Exclusions: 18. Nuclear, chemical or biological attack",
+            "HDFC Optima Secure: SECTION C. WAITING PERIOD AND EXCLUSIONS - 3. Specific Exclusions: a."
+        ],
+        "expected_keywords": [
+            "Nuclear attack",
+            "fissile/ fusion material",
+            "War"
+        ],
+        "expected_span_hint": [
+            "radioactivity capable of causing any Illness",
+            "Nuclear, Chemical or Biological attack or weapons"
+        ],
+        "comparison_focus": "exclusions",
+        "answer_type": "positive",
+        "expected_snippet": [
+            "18. Nuclear, chemical or biological attack or weapons, contributed to, caused by, resulting from or from any other cause or event contributing concurrently or in any other sequence to the loss, claim or expense.",
+            "a. War or any act of war, invasion, act of foreign enemy... Nuclear, Chemical or Biological attack or weapons, radiation of any kind."
+        ],
+        "reasoning_path": "Both policy documents list Nuclear, Chemical, or Biological attacks as specific exclusions that bar the admissibility of a claim."
+    },
+    {
+        "id": 20,
+        "query": "I have used up my 5 Lakh base Sum Insured in Care Supreme. I now have a new claim. Will the 'Unlimited Automatic Recharge' kick in immediately?",
+        "category": "financial_constraints",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.4 Benefit: Unlimited Automatic Recharge",
+            "3.1.4 Benefit: Unlimited Automatic Recharge - (i) Conditions"
+        ],
+        "expected_keywords": [
+            "exhausted",
+            "re-instatement",
+            "Plus Benefit"
+        ],
+        "expected_span_hint": [
+            "automatically make the re-instatement of up to the base Sum Insured",
+            "utilized only after... have been completely exhausted"
+        ],
+        "comparison_focus": null,
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "If a Claim is payable under the Policy, then the Company agrees to automatically make the re-instatement of up to the base Sum Insured unlimited times in a policy year which is valid for that Policy Year only",
+            "(i) The Recharge shall be utilized only after the base Sum Insured, applicable Cumulative Bonus Cumulative Bonus Super (if applicable) and Plus Benefit (if applicable) have been completely exhausted in that Policy Year."
+        ],
+        "reasoning_path": "The recharge is a valid benefit but its utilization is restricted by a mandatory sequence; it triggers only after the Base SI, Cumulative Bonus, and Plus Benefit are entirely exhausted."
+    },
+    {
+        "id": 21,
+        "query": "I have already claimed my full 5 Lakh Sum Insured for a heart condition this year under Care Supreme. If I am hospitalized again for the exact same heart condition, will the 'Unlimited Automatic Recharge' provide funds for this second claim?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
+            "3.1. BASE BENEFITS - 3.1.4 Benefit: Unlimited Automatic Recharge (iii)"
+        ],
+        "expected_keywords": [
+            "same illness",
+            "Unlimited Automatic Recharge",
+            "re-instatement"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "utilized for same illness as well as different Illnesses"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "(iii) Recharge amount can be utilized for same illness as well as different Illnesses."
+        ],
+        "reasoning_path": "Heart conditions are covered under base benefits (3.1.1), and Clause 3.1.4(iii) explicitly permits the Unlimited Automatic Recharge to be used for the 'same illness'."
+    },
+    {
+        "id": 22,
+        "query": "I need to have a complex dental surgery following an injury and want to do it as an out-patient (OPD) at my dentist's clinic. Does HDFC Optima Secure cover these expenses?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1.1. ii. Other Expenses",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS - 3. Specific Exclusions: l."
+        ],
+        "expected_keywords": [
+            "outpatient basis",
+            "Dental Treatment",
+            "In patient Care"
+        ],
+        "expected_span_hint": [
+            "In patient Care Dental Treatment, necessitated due to disease or Injury",
+            "Treatment taken on outpatient basis"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "In patient Care Dental Treatment, necessitated due to disease or Injury",
+            "l. Treatment taken on outpatient basis."
+        ],
+        "reasoning_path": "While dental treatment due to injury is a base benefit (1.1.1.ii), it is only covered as 'In patient Care'; treatment on an 'outpatient basis' is strictly excluded under 3.l."
+    },
+    {
+        "id": 23,
+        "query": "Does the Care Supreme policy offer a specific percentage discount on the annual premium for policyholders who are documented non-smokers?",
+        "category": "edge_case",
+        "difficulty": "easy",
+        "reasoning_hops": 1,
+        "source": "care",
+        "expected_sections": [],
+        "expected_keywords": [],
+        "expected_span_hint": [],
+        "comparison_focus": null,
+        "answer_type": "not_mentioned",
+        "expected_snippet": [],
+        "reasoning_path": "No relevant clause found after full policy scan"
+    },
+    {
+        "id": 24,
+        "query": "I am planning a surgery to correct my eyesight. My refractive error is measured at 8.0 dioptres. Is this procedure covered under the base Care Supreme policy?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
+            "4.1. Standard Exclusions - (b) Permanent Exclusions: 12. Refractive Error: (Code-Excl15)"
+        ],
+        "expected_keywords": [
+            "7.5 dioptres",
+            "refractive error",
+            "correction of eye sight"
+        ],
+        "expected_span_hint": [
+            "indemnify the Insured Person for Medical Expenses",
+            "refractive error less than 7.5 dioptres"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility",
+            "Expenses related to the treatment for correction of eye sight due to refractive error less than 7.5 dioptres."
+        ],
+        "reasoning_path": "Eyesight correction is covered as an in-patient hospitalization benefit (3.1.1) because the 8.0 dioptre error exceeds the 'less than 7.5 dioptres' exclusion threshold (Code-Excl15)."
+    },
+    {
+        "id": 25,
+        "query": "If I am injured while scuba diving as a professional during a competition, will HDFC Optima Secure cover my medical bills?",
+        "category": "exclusions",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS - 2. f. Hazardous or Adventure Sports: Code - Excl09"
+        ],
+        "expected_keywords": [
+            "professional",
+            "scuba diving",
+            "Excl09"
+        ],
+        "expected_span_hint": [
+            "Hospitalization of the Insured Person during the Policy Year",
+            "participation as a professional in Hazardous or Adventure sports"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "Expenses related to any treatment necessitated due to participation as a professional in Hazardous or Adventure sports, including but not limited to, para-jumping, rock climbing, mountaineering, rafting, motor racing, horse racing or scuba diving, hand gliding, sky diving, deep-sea diving."
+        ],
+        "reasoning_path": "While injuries are base benefits (1.1), treatment necessitated by participating as a 'professional' in scuba diving is a permanent exclusion under Code-Excl09."
+    },
+    {
+        "id": 26,
+        "query": "Which policy, if either, covers medical expenses for a normal delivery (Maternity) as a standard base benefit?",
+        "category": "comparison",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
+            "Care Supreme: 4.1. Standard Exclusions - (b) Permanent Exclusions: 15. Maternity: (Code Excl18)",
+            "HDFC Optima Secure: SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "HDFC Optima Secure: SECTION C. WAITING PERIOD AND EXCLUSIONS - 2. o. Maternity: Code - Excl18"
+        ],
+        "expected_keywords": [
+            "Excl18",
+            "traceable to childbirth",
+            "except ectopic pregnancy"
+        ],
+        "expected_span_hint": [
+            "minimum period of 24 consecutive hours",
+            "traceable to childbirth... except ectopic pregnancy",
+            "necessarily incurred by the Insured Person",
+            "traceable to childbirth... except ectopic pregnancy"
+        ],
+        "comparison_focus": "coverage",
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "a. Medical treatment expenses traceable to childbirth (including complicated deliveries and caesarean sections incurred during hospitalization) except ectopic pregnancy; b. Expenses towards miscarriage (unless due to an accident) and lawful medical termination of pregnancy during the policy period.",
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "i. Medical treatment expenses traceable to childbirth (including complicated deliveries and caesarean sections incurred during hospitalization) except ectopic pregnancy; ii. Expenses towards miscarriage (unless due to an accident) and lawful medical termination of pregnancy during the Policy Period."
+        ],
+        "reasoning_path": "Both policies exclude maternity and childbirth expenses (Code-Excl18) from their standard base hospitalization covers, allowing only ectopic pregnancy as an exception."
+    },
+    {
+        "id": 27,
+        "query": "I am staying in a 'Single Private AC Room' under Care Supreme. If the hospital charges separate 'Service Charges' and 'RMO charges' on my bill, are these covered by the 'No limit' room rent benefit?",
+        "category": "financial_constraints",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1 (ix) Conditions applicable for Benefit 'Hospitalization Expenses'",
+            "4.2. Specific Exclusions: 17. Expenses related to any kind of RMO charges"
+        ],
+        "expected_keywords": [
+            "No limit",
+            "RMO charges",
+            "Service charge"
+        ],
+        "expected_span_hint": [
+            "no separate restriction on Room Charges",
+            "any kind of RMO charges, Service charge, Surcharge"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "i. The eligible Room Rent or Room Category applicable for the Insured Person under the Policy is 'No limit', which means that there is no separate restriction on Room Charges incurred towards stay during Hospitalization",
+            "17. Expenses related to any kind of RMO charges, Service charge, Surcharge, night charges levied by the hospital under whatever head or transportation charges by visiting consultant."
+        ],
+        "reasoning_path": "Although the policy provides 'No limit' for room charges (3.1.1.ix), associated RMO and Service charges are explicitly listed as non-admissible expenses under Specific Exclusion 4.2.17."
+    },
+    {
+        "id": 28,
+        "query": "In HDFC Optima Secure, if I have both a Cumulative Bonus and a 'Plus Benefit' available, which one is used first to pay a claim after my Base Sum Insured is gone?",
+        "category": "financial_constraints",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "SECTION D. GENERAL TERMS AND CLAUSES - 1.19. Utilization of Sum Insured"
+        ],
+        "expected_keywords": [
+            "sequence of utilization",
+            "Base Sum Insured",
+            "Cumulative Bonus/Plus Benefit"
+        ],
+        "expected_span_hint": [
+            "indemnify Medical Expenses necessarily incurred",
+            "sequence of utilization of Sum Insured in this Policy will be as follows"
+        ],
+        "comparison_focus": null,
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year",
+            "The sequence of utilization of Sum Insured in this Policy will be as follows, subject to the covers being in force and amount utilized under each of the below sections during the Policy Year; a. Aggregate Deductible b. Base Sum Insured. c. Cumulative Bonus/Plus Benefit d. Secure Benefit e. Automatic Restore Benefit"
+        ],
+        "reasoning_path": "Per the mandatory utilization sequence (1.19), after the Base SI is exhausted, the Cumulative Bonus and Plus Benefit are treated as the next tier (Step 'c') for payment."
+    },
+    {
+        "id": 29,
+        "query": "I started my Care Supreme policy last week and was just hospitalized for a leg fracture after a car accident. Will the policy cover my surgery despite being in the first 30 days?",
+        "category": "waiting_period",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
+            "4.1. Standard Exclusions - (a) Waiting Periods: (iii) 30-day waiting period-Code- Excl03"
+        ],
+        "expected_keywords": [
+            "30 days",
+            "accident",
+            "Excl03"
+        ],
+        "expected_span_hint": [
+            "indemnify the Insured Person for Medical Expenses",
+            "except claims arising due to an accident"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility",
+            "a. Expenses related to the treatment of any illness within 30 days from the first policy commencement date shall be excluded except claims arising due to an accident, provided the same are covered."
+        ],
+        "reasoning_path": "While a 30-day waiting period (Code-Excl03) usually applies to illnesses, the clause contains an explicit exception for claims arising from an 'accident', allowing coverage."
+    },
+    {
+        "id": 30,
+        "query": "Compare how many days of Post-hospitalization Medical Expenses are covered by default under Care Supreme versus HDFC Optima Secure (Optima Secure Plan).",
+        "category": "comparison",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 3.1. BASE BENEFITS - 3.1.1 (v) Post-Hospitalization Medical Expenses",
+            "Care Supreme: 3.1. BASE BENEFITS - 3.1.1 (i) Benefit: In-patient Care",
+            "HDFC Optima Secure: SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
+            "HDFC Optima Secure: SECTION B. BENEFITS - 1.6. Post-Hospitalization Expenses"
+        ],
+        "expected_keywords": [
+            "180 days",
+            "discharge",
+            "indemnified"
+        ],
+        "expected_span_hint": [
+            "period of 180 days immediately after",
+            "provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "indemnify Medical Expenses necessarily incurred",
+            "incurred upto 180 days... immediately post the date of discharge"
+        ],
+        "comparison_focus": "coverage",
+        "answer_type": "positive",
+        "expected_snippet": [
+            "i) For a period of 180 days immediately after the Insured Person's date of discharge from the hospital",
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year",
+            "Such expenses shall be indemnified if the same were incurred upto 180 days unless otherwise specified in the Policy Schedule, immediately post the date of discharge from the Hospital."
+        ],
+        "reasoning_path": "Both policy documents specify a standard coverage period of 180 days for Post-hospitalization expenses (3.1.1.v and 1.6) following a valid base hospitalization claim."
+    },
+    {
+        "id": 31,
+        "query": "I need to undergo Intravitreal Injections for a retinal condition. Since this doesn't require 24-hour hospitalization, is it covered under Care Supreme?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (iii) Advance Technology Methods",
+            "2. Definitions > 2.1. Standard Definitions > 2.1.18. Hospitalization"
+        ],
+        "expected_keywords": [
+            "Intra vitreal injections",
+            "less than 24 consecutive hours"
+        ],
+        "expected_span_hint": [
+            "F. Intra vitreal injections",
+            "admission could be for a period of less than 24 consecutive hours"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person up to the Sum Insured, as specified in the Policy Schedule, for expenses incurred under Benefit 'Hospitalization expenses' for treatment taken through following advance technology methods: ... F. Intra vitreal injections",
+            "Hospitalization (not applicable for Overseas Travel Insurance) means admission in a Hospital for a minimum period of 24 consecutive 'In-patient Care' hours except for specified procedures/treatments, where such admission could be for a period of less than 24 consecutive hours."
+        ],
+        "reasoning_path": "Intravitreal injections are explicitly permitted under Advance Technology Methods, and the Hospitalization definition provides the necessary exception to the standard 24-hour rule for specified procedures."
+    },
+    {
+        "id": 32,
+        "query": "Care Health Insurance has confirmed my claim is valid but hasn't paid me yet, and it's been 20 days since I submitted the final documents. Am I entitled to any interest?",
+        "category": "claims",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "5. General Terms And Clauses > Standard General Terms & Clauses > 5.3. Claim Settlement (provision for Penal Interest) > i.",
+            "5. General Terms And Clauses > Standard General Terms & Clauses > 5.3. Claim Settlement (provision for Penal Interest) > ii."
+        ],
+        "expected_keywords": [
+            "15 days",
+            "2% above the bank rate"
+        ],
+        "expected_span_hint": [
+            "within 15 days from the date of intimation",
+            "liable to pay interest ... at a rate 2% above the bank rate"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall settle or reject a claim, as the case may be, within 15 days from the date of intimation on receipt of last necessary document.",
+            "In the case of delay in the payment of a claim, the Company shall be liable to pay interest from the date of intimation to the date of payment of claim at a rate 2% above the bank rate."
+        ],
+        "reasoning_path": "Clause 5.3(i) establishes a 15-day settlement deadline, and Clause 5.3(ii) mandates the payment of penal interest at 2% above the bank rate for delays beyond that period."
+    },
+    {
+        "id": 33,
+        "query": "If I am discharged for Pneumonia and then readmitted for the same Pneumonia 40 days later, do both policies treat this as a single continuous illness or a new claim for restoration/recharge triggers?",
+        "category": "comparison",
+        "difficulty": "hard",
+        "reasoning_hops": 3,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.4 Benefit: Unlimited Automatic Recharge > (iii)",
+            "HDFC Ergo: SECTION A. DEFINITIONS > 1.1. Standard Definitions > Def. 2. Any one illness"
+        ],
+        "expected_keywords": [
+            "same illness",
+            "relapse within 45 days"
+        ],
+        "expected_span_hint": [
+            "utilized for same illness as well as different Illnesses",
+            "includes relapse within 45 days from the date of last consultation"
+        ],
+        "comparison_focus": "coverage",
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "Recharge amount can be utilized for same illness as well as different Illnesses.",
+            "Any one illness means continuous period of illness and includes relapse within 45 days from the date of last consultation with the Hospital/Nursing Home where treatment was taken."
+        ],
+        "reasoning_path": "HDFC explicitly defines a same-illness relapse within 45 days as part of the 'Any one illness' limit, whereas Care Supreme permits Unlimited Automatic Recharge for the same illness without a specified relapse window for the restoration trigger."
+    },
+    {
+        "id": 34,
+        "query": "I have HDFC Optima Secure with a 10 Lakh Base SI and a 5 Lakh Cumulative Bonus. I also have the Secure Benefit. If I have a single claim of 12 Lakhs, what is the exact sequence of funds used to pay this?",
+        "category": "financial_constraints",
+        "difficulty": "hard",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
+            "SECTION D. GENERAL TERMS AND CLAUSES > Standard General Terms & Clauses > 1.19. Utilization of Sum Insured"
+        ],
+        "expected_keywords": [
+            "sequence of utilization",
+            "Base Sum Insured",
+            "Cumulative Bonus"
+        ],
+        "expected_span_hint": [
+            "indemnify Medical Expenses necessarily incurred",
+            "sequence of utilization of Sum Insured in this Policy will be as follows"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "The sequence of utilization of Sum Insured in this Policy will be as follows, subject to the covers being in force and amount utilized under each of the below sections during the Policy Year; a. Aggregate Deductible b. Base Sum Insured. c. Cumulative Bonus/Plus Benefit d. Secure Benefit e. Automatic Restore Benefit"
+        ],
+        "reasoning_path": "While Section B-1.1 permits the hospitalization claim, Section D-1.19 dictates the strict sequence: the 10L claim is first drawn from the Base SI (b), then the remaining 2L is drawn from the Cumulative Bonus (c)."
+    },
+    {
+        "id": 35,
+        "query": "Does either policy provide a monthly cash reimbursement for a high-end gym membership to maintain physical fitness?",
+        "category": "edge_case",
+        "difficulty": "easy",
+        "reasoning_hops": 1,
+        "source": "both",
+        "expected_sections": [],
+        "expected_keywords": [],
+        "expected_span_hint": [],
+        "comparison_focus": null,
+        "answer_type": "not_mentioned",
+        "expected_snippet": [],
+        "reasoning_path": "No relevant clause found after full policy scan"
+    },
+    {
+        "id": 36,
+        "query": "I have had my HDFC Optima Secure policy for 25 months. Can I now claim for a Joint Replacement Surgery that was not a pre-existing condition?",
+        "category": "waiting_period",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
+            "SECTION C. WAITING PERIOD AND EXCLUSIONS > 1. Waiting Periods > b. Specified Disease/Procedure waiting period: Code - Excl02"
+        ],
+        "expected_keywords": [
+            "24 months",
+            "Joint replacement surgeries"
+        ],
+        "expected_span_hint": [
+            "Hospitalization of the Insured Person during the Policy Year",
+            "excluded until the expiry of 24 months of continuous coverage"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "Expenses related to the treatment of the listed Conditions, surgeries/treatments shall be excluded until the expiry of 24 months of continuous coverage after the date of inception of the first Policy with us. ... Joint replacement surgeries"
+        ],
+        "reasoning_path": "Hospitalization is permitted under Section B-1.1, and the specific 24-month waiting period for joint replacement surgery (Excl02) has expired as the policy is in its 25th month."
+    },
+    {
+        "id": 37,
+        "query": "I was admitted to the hospital solely for a series of diagnostic tests and evaluation for a suspected condition, but no active treatment was given. Is this covered under Care Supreme?",
+        "category": "exclusions",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (i) Benefit: In-patient Care",
+            "4. Exclusions > 4.1. Standard Exclusions: > (b) Permanent Exclusions: > 1. Investigation & Evaluation: (Code-Excl04)"
+        ],
+        "expected_keywords": [
+            "primarily for diagnostics",
+            "Excl04"
+        ],
+        "expected_span_hint": [
+            "provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "admission primarily for diagnostics and evaluation purposes only are excluded"
+        ],
+        "comparison_focus": null,
+        "answer_type": "negative",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured, as specified in the Policy Schedule, provided that the Hospitalization is for a minimum period of 24 consecutive hours",
+            "a) Expenses related to any admission primarily for diagnostics and evaluation purposes only are excluded."
+        ],
+        "reasoning_path": "While general hospitalization is covered under Clause 3.1.1(i), the permanent exclusion Code-Excl04 explicitly denies coverage when the admission is primarily for diagnostic evaluation without active treatment."
+    },
+    {
+        "id": 38,
+        "query": "Is Oral Chemotherapy covered as a Day Care treatment under both policies, even if I am not admitted for 24 hours?",
+        "category": "comparison",
+        "difficulty": "hard",
+        "reasoning_hops": 2,
+        "source": "both",
+        "expected_sections": [
+            "Care Supreme: 3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (iii) Advance Technology Methods",
+            "HDFC Ergo: SECTION A. DEFINITIONS > 1.1. Standard Definitions > Def. 11. Day Care Treatment"
+        ],
+        "expected_keywords": [
+            "Oral chemotherapy",
+            "technological advancement",
+            "less than 24 hours"
+        ],
+        "expected_span_hint": [
+            "D. Oral chemotherapy",
+            "undertaken under General or Local Anaesthesia in a hospital/day care centre in less than 24 hours because of technological advancement"
+        ],
+        "comparison_focus": "coverage",
+        "answer_type": "positive",
+        "expected_snippet": [
+            "D. Oral chemotherapy",
+            "Day Care Treatment means those medical treatment, and/or surgical procedure which is i) undertaken under General or Local Anaesthesia in a hospital/day care centre in less than 24 hours because of technological advancement, and ii) which would have otherwise required hospitalization of more than 24 hours"
+        ],
+        "reasoning_path": "Care Supreme explicitly covers Oral Chemotherapy under Advance Technology Methods (3.1.1.iii.D), and HDFC covers procedures like this under its Day Care Treatment definition (Def. 11) for technological advancements requiring less than 24 hours."
+    },
+    {
+        "id": 39,
+        "query": "In HDFC Optima Secure, once my Base Sum Insured is exhausted by a claim, does the Secure Benefit provide an additional 100% of the Base SI for that same claim?",
+        "category": "financial_constraints",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "hdfc",
+        "expected_sections": [
+            "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
+            "SECTION B. BENEFITS > 2. Optional Covers > 2.5. Secure Benefit"
+        ],
+        "expected_keywords": [
+            "after exhaustion",
+            "Base Sum Insured"
+        ],
+        "expected_span_hint": [
+            "indemnify Medical Expenses necessarily incurred",
+            "applicable only after exhaustion of Base Sum Insured"
+        ],
+        "comparison_focus": null,
+        "answer_type": "positive",
+        "expected_snippet": [
+            "The Company shall indemnify Medical Expenses necessarily incurred by the Insured Person for Hospitalization of the Insured Person during the Policy Year due to Illness or Injury, up to the Sum Insured specified in the Policy Schedule",
+            "An additional amount as specified in the Policy Schedule will be available to the Insured Person as Sum Insured for all claims admissible under Section B (Base Coverage) and Section B-2.3 (Protect Benefit) during the Policy Year, subject to the following conditions: ... c. The Secure Benefit will be applicable only after exhaustion of Base Sum Insured."
+        ],
+        "reasoning_path": "The hospitalization permission in Section B-1.1 is extended by the Secure Benefit (2.5), which provides an additional Sum Insured amount that triggers specifically after the exhaustion of the Base Sum Insured."
+    },
+    {
+        "id": 40,
+        "query": "I need to be transported from a remote location via Air Ambulance to a hospital for emergency treatment. Does my base Care Supreme policy cover this?",
+        "category": "coverage",
+        "difficulty": "medium",
+        "reasoning_hops": 2,
+        "source": "care",
+        "expected_sections": [
+            "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (i) Benefit: In-patient Care",
+            "3. Benefits Covered Under The Policy > 3.2. Optional Benefits > 3.2.14 Air Ambulance cover"
+        ],
+        "expected_keywords": [
+            "Air Ambulance",
+            "Optional Benefit"
+        ],
+        "expected_span_hint": [
+            "maximum up to the Sum Insured",
+            "The Company will indemnify the Insured Person up to the amount as specified in Policy Schedule ... on availing Air Ambulance services"
+        ],
+        "comparison_focus": null,
+        "answer_type": "conditional",
+        "expected_snippet": [
+            "The Company will indemnify the Insured Person for Medical Expenses incurred towards Hospitalization through Cashless or Reimbursement Facility, maximum up to the Sum Insured",
+            "The Company will indemnify the Insured Person up to the amount as specified in Policy Schedule, for the Reasonable and Customary Charges necessarily incurred on availing Air Ambulance services, in India, offered by a Hospital or by an Ambulance service provider for the Insured Person's necessary transportation"
+        ],
+        "reasoning_path": "While base hospitalization expenses are covered under 3.1.1, Air Ambulance is explicitly categorized as an Optional Benefit under 3.2.14, meaning it is only covered if it has been specifically opted for and listed in the Policy Schedule."
+    }
+]
