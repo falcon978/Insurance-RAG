@@ -39,14 +39,20 @@ class InsuranceRAGEngine:
         """
         logger.info(f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()})")
         
-        # 1. Initialize Shared Models
+        # 1. Initialize Shared Models Dynamically
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-large-en-v1.5",
+            model_name=settings.embed_model_name,
             model_kwargs={'device': settings.hf_device}, 
             encode_kwargs={'normalize_embeddings': True}
         )
-        self.reranker = ContextReranker(device=settings.hf_device)
-        self.generator = ResponseGenerator(api_key=gemini_api_key)
+        self.reranker = ContextReranker(
+            model_name=settings.rerank_model_name,
+            device=settings.hf_device
+        )
+        self.generator = ResponseGenerator(
+            api_key=gemini_api_key,
+            model_name=settings.llm_model_name
+        )
         
         # Cache to store BM25 index in memory to avoid rebuilding every query
         self._bm25_cache = {}

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Pinecone Config
     pinecone_api_key: str = os.getenv("PINECONE_API_KEY")
     pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME")
+
+    # MODEL CONFIGURATION
+    embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")
+    rerank_model_name: str = os.getenv("RERANK_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    llm_model_name: str = os.getenv("LLM_MODEL_NAME", "gemini-3-flash-preview")
     
     # LLM and Device Config
     admin_password: str = "admin123"

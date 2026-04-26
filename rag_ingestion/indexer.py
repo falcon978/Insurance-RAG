@@ -45,10 +45,10 @@ class PolicyVectorStore:
         """
         self.collection_name = collection_name
         
-        # 1. Initialize Shared Embedding Model
-        logging.info(f"Initializing embedding model (BAAI/bge-large-en-v1.5)...")
+        # 1. Initialize Shared Embedding Model Dynamically
+        logging.info(f"Initializing embedding model ({settings.embed_model_name})...")
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-large-en-v1.5",
+            model_name=settings.embed_model_name,
             model_kwargs={'device': device}, 
             encode_kwargs={'normalize_embeddings': True} # Required for cosine similarity
         )
