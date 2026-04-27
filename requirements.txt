@@ -6,13 +6,16 @@ streamlit>=1.32.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
 requests>=2.31.0
+nest-asyncio>=1.6.0  # Prevents Jupyter/Colab event loop crashes
 
 # LLM & LangChain Framework
 langchain>=0.1.13
 langchain-core>=0.1.33
 langchain-community>=0.0.28
+langchain-text-splitters>=0.0.1  # Extracted from core
 langchain-google-genai>=1.0.1
 langchain-huggingface>=0.0.1
+langsmith>=0.1.0  # Explicit tracing SDK
 
 # Vector Databases
 chromadb>=0.4.24
@@ -28,6 +31,10 @@ sentence-transformers>=2.6.0
 pymupdf>=1.24.0
 pymupdf4llm>=0.0.4
 tiktoken>=0.6.0
+
+# Core Data Science & Protobuf Locks (Crucial for stability)
+numpy<2.0.0
+protobuf<5.0.0  # Prevents ChromaDB and Google GenAI clash
 
 # Evaluation & Testing
 deepeval>=1.1.2
