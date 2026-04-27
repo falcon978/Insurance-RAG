@@ -5,7 +5,7 @@ Phase 1: PDF to Markdown Extraction.
 Uses PyMuPDF4LLM's advanced layout engine to extract structurally perfect Markdown.
 """
 
-import fitz
+import pymupdf
 import pymupdf4llm
 from pathlib import Path
 import logging
@@ -44,7 +44,7 @@ class PDFExtractor:
 
     def get_document_metadata(self) -> dict:
         """Standard PyMuPDF metadata extraction."""
-        with fitz.open(str(self.pdf_path)) as doc:
+        with pymupdf.open(str(self.pdf_path)) as doc:
             meta = doc.metadata or {}
             return {
                 "title"      : meta.get("title",   ""),
@@ -57,7 +57,7 @@ class PDFExtractor:
 
     def get_toc(self) -> list[dict]:
         """Standard PyMuPDF TOC extraction."""
-        with fitz.open(str(self.pdf_path)) as doc:
+        with pymupdf.open(str(self.pdf_path)) as doc:
             return [
                 {"level": entry[0], "title": entry[1], "page": entry[2]}
                 for entry in doc.get_toc()

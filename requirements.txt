@@ -16,15 +16,16 @@ langchain-huggingface>=0.0.1
 
 # Vector Databases
 chromadb>=0.4.24
+langchain-chroma>=0.1.0
 pinecone-client>=3.1.0
 langchain-pinecone>=0.1.0
 
 # Retrieval & Reranking
 rank-bm25>=0.2.2
 sentence-transformers>=2.6.0
-cross-encoder>=0.0.1
 
 # Extraction & Processing
+pymupdf>=1.24.0
 pymupdf4llm>=0.0.4
 tiktoken>=0.6.0
 
