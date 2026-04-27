@@ -32,9 +32,10 @@ pymupdf>=1.24.0
 pymupdf4llm>=0.0.4
 tiktoken>=0.6.0
 
-# Core Data Science & Protobuf Locks (Crucial for stability)
+# Core Data Science & Locks (ORDER MATTERS)
 numpy<2.0.0
-protobuf<5.0.0  # Prevents ChromaDB and Google GenAI clash
+protobuf<5.0.0  
+spacy>=3.7.4     # Added to force recompilation against numpy 1.x
 
 # Evaluation & Testing
 deepeval>=1.1.2
