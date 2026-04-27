@@ -26,7 +26,6 @@ cross-encoder>=0.0.1
 
 # Extraction & Processing
 pymupdf4llm>=0.0.4
-fitz>=0.0.1.dev2
 tiktoken>=0.6.0
 
 # Evaluation & Testing
