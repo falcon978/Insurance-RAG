@@ -35,7 +35,7 @@ tiktoken>=0.6.0
 # Core Data Science & Locks (ORDER MATTERS)
 numpy<2.0.0
 protobuf<5.0.0  
-spacy>=3.7.4     # Added to force recompilation against numpy 1.x
+spacy<3.8.0     # Added to force recompilation against numpy 1.x
 
 # Evaluation & Testing
 deepeval>=1.1.2
