@@ -9,6 +9,7 @@ import re
 import logging
 from typing import List, Optional
 from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from rag.utils import format_retrieved_context
 
@@ -26,23 +27,12 @@ class ResponseGenerator:
             api_key=api_key
         )
 
-    def _extract_json(self, raw_output) -> str:
+    def _extract_json(self, raw_output: str) -> str:
         """
         Uses regex to isolate the JSON object.
-        Prevents failures if the LLM outputs markdown blocks, preamble text,
-        or structured list blocks from newer LangChain versions.
+        (LangChain lists are now safely handled upstream by StrOutputParser).
         """
-        # --- NEW FIX: Handle LangChain list outputs ---
-        if isinstance(raw_output, list):
-            # Extract text from dict blocks (or cast to string if plain items)
-            raw_output = "".join(
-                block.get("text", "") if isinstance(block, dict) else str(block) 
-                for block in raw_output
-            )
-        elif not isinstance(raw_output, str):
-            raw_output = str(raw_output)
-        # ----------------------------------------------
-
+        # We know raw_output is safely a string now!
         match = re.search(r'(\{.*\}|\[.*\])', raw_output, re.DOTALL)
         if match:
             return match.group(1)
@@ -59,7 +49,7 @@ class ResponseGenerator:
         
         # --- PASS 1: The Adjudicator (Deterministic JSON) ---
         from rag.prompts import single_policy_decision_template
-        decision_chain = single_policy_decision_template | self.llm
+        decision_chain = single_policy_decision_template | self.llm | StrOutputParser()
         
         decision_response = decision_chain.invoke({
             "context": context_string, 
@@ -72,7 +62,7 @@ class ResponseGenerator:
         
         # --- PASS 2: The Explainer (Markdown UI) ---
         from rag.prompts import single_policy_explainer_template
-        explainer_chain = single_policy_explainer_template | self.llm
+        explainer_chain = single_policy_explainer_template | self.llm | StrOutputParser()
         final_response = explainer_chain.invoke({
             "decision_json": clean_json, 
             "query": query
@@ -88,7 +78,7 @@ class ResponseGenerator:
         from rag.prompts import compare_policies_decision_template, compare_policies_explainer_template
         
         # PASS 1: Adjudicator
-        decision_chain = compare_policies_decision_template | self.llm
+        decision_chain = compare_policies_decision_template | self.llm | StrOutputParser()
         decision_response = decision_chain.invoke({
             "context_a": context_a, 
             "context_b": context_b, 
@@ -99,7 +89,7 @@ class ResponseGenerator:
         clean_json = self._extract_json(decision_response.content)
         
         # PASS 2: Explainer
-        explainer_chain = compare_policies_explainer_template | self.llm
+        explainer_chain = compare_policies_explainer_template | self.llm | StrOutputParser()
         final_response = explainer_chain.invoke({
             "decision_json": clean_json, 
             "query": query
