@@ -7,19 +7,19 @@ Orchestrator: wires PDFExtractor → MarkdownHierarchicalChunker → PolicyVecto
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+import logging
+import sys
 
+from config import settings # Added centralized settings
 from .models import PolicyChunk
 from .extractor import PDFExtractor
 from .cleaner import clean_markdown_layout
 from .chunker import MarkdownHierarchicalChunker
 from .indexer import PolicyVectorStore
 
-import logging
-import sys
-
 # 1. Set up a basic console handler so logs actually have a place to print
 logging.basicConfig(
-    level=logging.ERROR, # Default everything to ERROR
+    level=logging.ERROR,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
@@ -33,8 +33,6 @@ logging.getLogger("extractor").setLevel(logging.INFO)
 logging.getLogger("chunker").setLevel(logging.INFO)
 logging.getLogger("indexer").setLevel(logging.INFO)
 logging.getLogger("pipeline").setLevel(logging.INFO)
-
-
 
 @dataclass
 class ExtractionResult:
@@ -57,15 +55,13 @@ class ExtractionPipeline:
     def __init__(
         self,
         pdf_path: str,
-        persist_dir: str = "./chroma_data",
         collection_name: str = "insurance_policies",
         chunk_size: int = 1200,
         chunk_overlap: int = 150,
-        device: str = "cpu",
+        device: str = settings.hf_device, # Pulls from config
         verbose: bool = True,
     ):
         self.pdf_path = Path(pdf_path)
-        self.persist_dir = persist_dir
         self.collection_name = collection_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -103,12 +99,14 @@ class ExtractionPipeline:
         self._log(f"           {len(chunks)} RAG chunks created")
 
         # ── Phase 3: Index ────────────────────────────────────────────
-        self._log(f"Phase 3/3 — Indexing into ChromaDB ({self.persist_dir}) …")
+        # Dynamically log the correct database type
+        self._log(f"Phase 3/3 — Indexing into {settings.vector_db_type.upper()} …")
+        
         store = PolicyVectorStore(
-            persist_directory=self.persist_dir,
             collection_name=self.collection_name,
             device=self.device,
-        )
+        ) # Removed the invalid persist_directory argument!
+        
         store.index_chunks(chunks)
 
         elapsed  = round(time.time() - t0, 2)
@@ -119,7 +117,7 @@ class ExtractionPipeline:
             "avg_chunk_chars"   : avg_chars,
             "avg_token_estimate": avg_chars // 4,
             "indexed_to_db"     : True,
-            "database_path"     : self.persist_dir,
+            "database_type"     : settings.vector_db_type, # Reflects Pinecone or Chroma
             "elapsed_seconds"   : elapsed,
         }
 

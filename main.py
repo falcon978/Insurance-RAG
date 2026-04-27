@@ -113,8 +113,7 @@ async def ingest_file(collection_name: str = Form(...), file: UploadFile = File(
             tmp_path = tmp.name
             
         ExtractionPipeline(
-            pdf_path=tmp_path, 
-            persist_dir=settings.chroma_dir, 
+            pdf_path=tmp_path,
             collection_name=collection_name
         ).run()
         
@@ -136,7 +135,6 @@ def ingest_url(req: UrlIngestRequest):
             tmp_path = tmp.name
         ExtractionPipeline(
             pdf_path=tmp_path,
-            persist_dir=settings.chroma_dir,
             collection_name=req.collection_name
         ).run()
         return StandardResponse(status="success", message="URL indexed")
