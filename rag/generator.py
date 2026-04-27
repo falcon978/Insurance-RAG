@@ -26,14 +26,27 @@ class ResponseGenerator:
             api_key=api_key
         )
 
-    def _extract_json(self, raw_output: str) -> str:
+    def _extract_json(self, raw_output) -> str:
         """
         Uses regex to isolate the JSON object.
-        Prevents failures if the LLM outputs markdown blocks or preamble text.
+        Prevents failures if the LLM outputs markdown blocks, preamble text,
+        or structured list blocks from newer LangChain versions.
         """
+        # --- NEW FIX: Handle LangChain list outputs ---
+        if isinstance(raw_output, list):
+            # Extract text from dict blocks (or cast to string if plain items)
+            raw_output = "".join(
+                block.get("text", "") if isinstance(block, dict) else str(block) 
+                for block in raw_output
+            )
+        elif not isinstance(raw_output, str):
+            raw_output = str(raw_output)
+        # ----------------------------------------------
+
         match = re.search(r'(\{.*\}|\[.*\])', raw_output, re.DOTALL)
         if match:
             return match.group(1)
+            
         # Fallback: strip markdown if regex fails but structure exists
         return raw_output.replace("```json", "").replace("```", "").strip()
 
