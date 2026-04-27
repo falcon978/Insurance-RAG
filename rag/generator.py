@@ -57,7 +57,7 @@ class ResponseGenerator:
             "history": history or []
         })
         
-        clean_json = self._extract_json(decision_response.content)
+        clean_json = self._extract_json(decision_response)
         logger.info(f"=== PASS 1 ADJUDICATOR JSON ===\n{clean_json}\n==============================")
         
         # --- PASS 2: The Explainer (Markdown UI) ---
@@ -68,7 +68,7 @@ class ResponseGenerator:
             "query": query
         })
         
-        return final_response.content
+        return final_response
 
     def generate_comparison(self, query: str, docs_a: List[Document], name_a: str, docs_b: List[Document], name_b: str, history: Optional[List] = None) -> str:
         """Runs the comparison pipeline across two policies with history."""
@@ -86,7 +86,7 @@ class ResponseGenerator:
             "history": history or []
         })
         
-        clean_json = self._extract_json(decision_response.content)
+        clean_json = self._extract_json(decision_response)
         
         # PASS 2: Explainer
         explainer_chain = compare_policies_explainer_template | self.llm | StrOutputParser()
@@ -95,4 +95,4 @@ class ResponseGenerator:
             "query": query
         })
         
-        return final_response.content
+        return final_response
