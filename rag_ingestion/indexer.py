@@ -10,14 +10,14 @@ a local text corpus to allow for decoupled BM25 keyword search.
 Key Features:
   - Idempotent Upserts: Uses your custom `chunk_id` so re-running the script 
     updates existing chunks rather than duplicating them.
-  - Metadata Flattening: ChromaDB strictly requires metadata values to be strings, 
-    integers, floats, or booleans. We flatten the nested dicts here.
+  - Namespace Checks: Checks if the vector namespace is already populated before hitting APIs.
+  - BM25 Deduplication: Prevents bloating the local pickle file with duplicate documents.
 """
 
 import os
 import pickle
 import logging
-from typing import List
+from typing import List, Tuple
 
 # Conditional imports for Vector DB providers
 from langchain_chroma import Chroma
@@ -80,22 +80,38 @@ class PolicyVectorStore:
         # Create a specific pickle file for this collection
         return os.path.join(settings.bm25_dir, f"{self.collection_name}_bm25.pkl")
 
-    def index_chunks(self, chunks: List[PolicyChunk], batch_size: int = 100):
+    def _is_namespace_populated(self) -> bool:
         """
-        Dual-indexes chunks: 
-        1. Upserts embeddings to the Vector DB.
-        2. Persists the Document corpus locally for the BM25 index.
+        Checks if the current namespace/collection already contains vectors.
+        This prevents redundant embedding calculations and API calls.
         """
-        if not chunks:
-            logging.info("No chunks provided to index.")
-            return
+        try:
+            if settings.vector_db_type == "pinecone":
+                # Pinecone specific stats check
+                stats = self.vector_store._index.describe_index_stats()
+                namespaces = stats.get('namespaces', {})
+                if self.collection_name in namespaces and namespaces[self.collection_name]['vector_count'] > 0:
+                    return True
+            else:
+                # ChromaDB specific stats check
+                count = self.vector_store._collection.count()
+                if count > 0:
+                    return True
+        except Exception as e:
+            logging.warning(f"Could not verify namespace stats, assuming empty: {e}")
+            
+        return False
 
+    def _prepare_documents(self, chunks: List[PolicyChunk]) -> Tuple[List[Document], List[str]]:
+        """Transforms raw PolicyChunks into Langchain Documents with flattened metadata."""
         documents = []
         ids = []
 
         for chunk in chunks:
             # Flatten metadata for database cross-compatibility
+            # Note: We inject chunk_id into metadata here to help with BM25 deduplication later
             flat_metadata = {
+                "chunk_id": chunk.chunk_id, 
                 "source_file": chunk.source_file,
                 "page_start": chunk.page_start,
                 "page_end": chunk.page_end,
@@ -112,8 +128,11 @@ class PolicyVectorStore:
             doc = Document(page_content=chunk.text, metadata=flat_metadata)
             documents.append(doc)
             ids.append(chunk.chunk_id)
+            
+        return documents, ids
 
-        # A. Batch Upsert to Vector Store
+    def _upsert_to_vector_db(self, documents: List[Document], ids: List[str], batch_size: int):
+        """Handles batch upserting embeddings into the configured Vector DB."""
         total_batches = (len(documents) + batch_size - 1) // batch_size
         logging.info(f"Adding {len(documents)} chunks to {settings.vector_db_type.upper()} in {total_batches} batches...")
 
@@ -123,26 +142,56 @@ class PolicyVectorStore:
             self.vector_store.add_documents(documents=batch_docs, ids=batch_ids)
             logging.info(f"  Processed batch {(i//batch_size) + 1}/{total_batches}")
 
-        # B. Decoupled BM25 Corpus Persistence
+    def _upsert_to_bm25(self, documents: List[Document]):
+        """Persists the raw documents to a local Pickle file for BM25 hybrid search."""
         bm25_path = self._get_bm25_path()
         try:
-            # 1. Load existing corpus if it exists to prevent overwriting previous PDFs
             existing_documents = []
+            existing_ids = set()
+            
+            # 1. Load existing corpus to prevent complete overwrite
             if os.path.exists(bm25_path):
                 with open(bm25_path, "rb") as f:
                     existing_documents = pickle.load(f)
+                    # Track existing chunk_ids to avoid duplicating the same file
+                    existing_ids = {doc.metadata.get('chunk_id') for doc in existing_documents if doc.metadata.get('chunk_id')}
             
-            # 2. Append new documents
-            existing_documents.extend(documents)
+            # 2. Filter for strictly NEW documents
+            new_documents = [doc for doc in documents if doc.metadata.get('chunk_id') not in existing_ids]
+            
+            if not new_documents:
+                logging.info(f"No new documents to add to BM25 corpus at: {bm25_path}")
+                return
 
-            # 3. Save combined corpus
+            # 3. Append and save
+            existing_documents.extend(new_documents)
             with open(bm25_path, "wb") as f:
                 pickle.dump(existing_documents, f)
-            logging.info(f"Lexical corpus persisted for local BM25 search at: {bm25_path}")
+                
+            logging.info(f"Lexical corpus persisted! Added {len(new_documents)} new documents for local BM25 search at: {bm25_path}")
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")
 
-        logging.info("Indexing complete!")
+    def index_chunks(self, chunks: List[PolicyChunk], batch_size: int = 100):
+        """
+        Orchestrates the dual-indexing process.
+        """
+        if not chunks:
+            logging.info("No chunks provided to index.")
+            return
+
+        documents, ids = self._prepare_documents(chunks)
+
+        # 1. Handle Vector DB Upsert (with Idempotent Check)
+        if self._is_namespace_populated():
+            logging.info(f"Namespace/Collection '{self.collection_name}' already contains vectors. Skipping Vector DB ingestion.")
+        else:
+            self._upsert_to_vector_db(documents, ids, batch_size)
+
+        # 2. Handle BM25 Persistence (Always run, relies on internal deduplication)
+        self._upsert_to_bm25(documents)
+
+        logging.info("Indexing orchestration complete!")
 
     def get_retriever(self, k: int = 4):
         """

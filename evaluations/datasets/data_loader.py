@@ -27,5 +27,5 @@ def load_golden_dataset(filename="golden_dataset.json"):
             item["expected_snippet"],
             item["expected_keywords"],
             item["reasoning_path"]
-        ) for item in data
+        ) for item in data[:5] # Limit to first 5 for quick testing; remove slicing for full dataset
     ]

@@ -59,10 +59,14 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(test_case, [
-        recall_metric,       # Evaluates embedding model (Recall@K)
-        precision_metric,    # Evaluates reranker/ranking (MRR)
-        faithfulness_metric, # Evaluates LLM hallucination
-        relevancy_metric,    # Evaluates generic answer quality
-        reasoning_metric     # Evaluates strict clause logic
-    ])
+    assert_test(
+        test_case, 
+        [
+            recall_metric,       # Evaluates embedding model (Recall@K)
+            precision_metric,    # Evaluates reranker/ranking (MRR)
+            faithfulness_metric, # Evaluates LLM hallucination
+            relevancy_metric,    # Evaluates generic answer quality
+            reasoning_metric     # Evaluates strict clause logic
+        ],
+        run_async=False # Run synchronously to ensure clear metric outputs in notebooks
+    )

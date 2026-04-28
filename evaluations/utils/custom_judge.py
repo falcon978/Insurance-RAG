@@ -4,6 +4,7 @@ custom_judge.py
 Provides a globally accessible DeepEval judge wrapper.
 Automatically configures itself using eval_config.py.
 """
+import time
 from langchain_groq import ChatGroq
 from deepeval.models.base_model import DeepEvalBaseLLM
 from evaluations.eval_config import eval_settings
@@ -20,6 +21,7 @@ class GroqJudge(DeepEvalBaseLLM):
         return self.model.invoke(prompt).content
 
     async def a_generate(self, prompt: str) -> str:
+        time.sleep(eval_settings.rate_limit_delay_seconds)  # Respect rate limits in async context
         res = await self.model.ainvoke(prompt)
         return res.content
 
@@ -34,6 +36,7 @@ def get_eval_judge() -> GroqJudge:
     groq_model = ChatGroq(
         model=eval_settings.judge_model_name, 
         groq_api_key=eval_settings.groq_api_key,
-        max_retries=6
+        max_retries=3,
+        temperature=0.0
     )
     return GroqJudge(model=groq_model)
