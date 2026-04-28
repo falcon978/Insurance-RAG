@@ -1,26 +1,67 @@
-# evaluations/test_cases/test_hybrid_vs_semantic.py
+"""
+test_hybrid_vs_semantic.py
+--------------------------
+A/B testing for Contextual Recall.
+Measures the retrieval performance of Pure Vector Search vs. Hybrid Search (Vector + BM25).
+"""
 import pytest
-import os
+import time
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import ContextualRecallMetric
 
 from evaluations.utils.rag_wrapper import EvalRAGWrapper
 from evaluations.datasets.data_loader import load_golden_dataset
+from evaluations.eval_config import eval_settings
+from evaluations.utils.custom_judge import get_eval_judge
 
 rag = EvalRAGWrapper()
-JUDGE_MODEL = os.getenv("DEEPEVAL_JUDGE_MODEL", "gpt-4o")
+eval_judge = get_eval_judge()
 
-# Recall checks if the required documents were fetched at all
-recall_metric = ContextualRecallMetric(threshold=0.8, model=JUDGE_MODEL, include_reason=True)
+# Contextual Recall checks if the required documents were fetched in the raw retrieval phase
+recall_metric = ContextualRecallMetric(threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True)
 
+# ---------------------------------------------------------
+# TEST A: Pure Semantic Baseline
+# ---------------------------------------------------------
 @pytest.mark.parametrize("case_id, query, source, expected_snippets, keywords, reasoning", load_golden_dataset())
 def test_pure_semantic_search(case_id, query, source, expected_snippets, keywords, reasoning):
-    collection = "hdfc_care_docs" if source == "both" else f"{source}_docs"
     
-    # disable_bm25=True forces pure vector search
+    time.sleep(eval_settings.rate_limit_delay_seconds)
+    
+    # Isolate vector search by forcing strategy="semantic"
     actual_output, retrieved_contexts = rag.query(
-        query=query, collection_name=collection, retrieve_top_k=10, rerank_top_k=0, disable_bm25=True
+        query=query, 
+        source=source, # The wrapper handles the mapping!
+        retrieve_top_k=10, 
+        rerank_top_k=0,
+        strategy="semantic"
+    )
+    
+    test_case = LLMTestCase(
+        input=query,
+        actual_output=actual_output,
+        retrieval_context=retrieved_contexts,
+        expected_retrieval_context=expected_snippets
+    )
+    
+    assert_test(test_case, [recall_metric])
+
+# ---------------------------------------------------------
+# TEST B: Hybrid Search (Semantic + BM25)
+# ---------------------------------------------------------
+@pytest.mark.parametrize("case_id, query, source, expected_snippets, keywords, reasoning", load_golden_dataset())
+def test_hybrid_search(case_id, query, source, expected_snippets, keywords, reasoning):
+    
+    time.sleep(eval_settings.rate_limit_delay_seconds)
+    
+    # Enable lexical fusion by forcing strategy="hybrid"
+    actual_output, retrieved_contexts = rag.query(
+        query=query, 
+        source=source, # The wrapper handles the mapping!
+        retrieve_top_k=10, 
+        rerank_top_k=0, 
+        strategy="hybrid"
     )
     
     test_case = LLMTestCase(

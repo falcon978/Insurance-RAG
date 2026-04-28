@@ -1,6 +1,11 @@
-# evaluations/test_cases/test_standard_rag_metrics.py
+"""
+test_standard_rag_metrics.py
+----------------------------
+Executes the core RAG Triad (Recall, Precision, Faithfulness, Relevancy) + Custom Logic Metric
+across the entire golden dataset.
+"""
 import pytest
-import os
+import time
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import (
@@ -13,16 +18,18 @@ from deepeval.metrics import (
 from evaluations.utils.rag_wrapper import EvalRAGWrapper
 from evaluations.datasets.data_loader import load_golden_dataset
 from evaluations.metrics.insurance_metrics import get_reasoning_metric
+from evaluations.eval_config import eval_settings
+from evaluations.utils.custom_judge import get_eval_judge
 
-# Initialize Wrapper and Configs
+# 1. Initialize Wrapper and Global Judge
 rag = EvalRAGWrapper()
-JUDGE_MODEL = os.getenv("DEEPEVAL_JUDGE_MODEL", "gpt-4o")
+eval_judge = get_eval_judge()
 
-# Initialize standard metrics globally for the suite
-recall_metric = ContextualRecallMetric(threshold=0.8, model=JUDGE_MODEL, include_reason=True)
-precision_metric = ContextualPrecisionMetric(threshold=0.8, model=JUDGE_MODEL, include_reason=True)
-faithfulness_metric = FaithfulnessMetric(threshold=0.9, model=JUDGE_MODEL, include_reason=True)
-relevancy_metric = AnswerRelevancyMetric(threshold=0.8, model=JUDGE_MODEL, include_reason=True)
+# 2. Initialize standard metrics globally for the suite using config thresholds
+recall_metric = ContextualRecallMetric(threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True)
+precision_metric = ContextualPrecisionMetric(threshold=eval_settings.precision_threshold, model=eval_judge, include_reason=True)
+faithfulness_metric = FaithfulnessMetric(threshold=eval_settings.faithfulness_threshold, model=eval_judge, include_reason=True)
+relevancy_metric = AnswerRelevancyMetric(threshold=eval_settings.relevancy_threshold, model=eval_judge, include_reason=True)
 reasoning_metric = get_reasoning_metric()
 
 @pytest.mark.parametrize(
@@ -30,12 +37,14 @@ reasoning_metric = get_reasoning_metric()
     load_golden_dataset()
 )
 def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, reasoning):
-    collection = "hdfc_care_docs" if source == "both" else f"{source}_docs"
+    
+    # Pause to respect free tier API rate limits
+    time.sleep(eval_settings.rate_limit_delay_seconds)
     
     # Standard Execution
     actual_output, retrieved_contexts = rag.query(
         query=query, 
-        collection_name=collection, 
+        source=source, # The wrapper handles the mapping!
         retrieve_top_k=10, 
         rerank_top_k=3
     )
@@ -50,13 +59,10 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(
-        test_case, 
-        [
-            recall_metric,       # Evaluates embedding model (Recall@K)
-            precision_metric,    # Evaluates reranker/ranking (MRR)
-            faithfulness_metric, # Evaluates LLM hallucination
-            relevancy_metric,    # Evaluates generic answer quality
-            reasoning_metric     # Evaluates strict clause logic
-        ]
-    )
+    assert_test(test_case, [
+        recall_metric,       # Evaluates embedding model (Recall@K)
+        precision_metric,    # Evaluates reranker/ranking (MRR)
+        faithfulness_metric, # Evaluates LLM hallucination
+        relevancy_metric,    # Evaluates generic answer quality
+        reasoning_metric     # Evaluates strict clause logic
+    ])

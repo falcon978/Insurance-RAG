@@ -43,3 +43,4 @@ pandas<2.2.0        # Protects deepeval
 # Evaluation & Testing
 deepeval>=1.1.2
 pytest>=8.0.0
+langchain-groq==1.1.2
