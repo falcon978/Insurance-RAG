@@ -27,7 +27,7 @@ class EvalSettings(BaseSettings):
 
     # Rate Limiting (Crucial for free tier APIs like Groq)
     # Pauses the pytest loop to avoid HTTP 429 Too Many Requests errors
-    rate_limit_delay_seconds: int = 15
+    rate_limit_delay_seconds: int = 70
 
     class Config:
         env_file = ".env"

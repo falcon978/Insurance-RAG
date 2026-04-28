@@ -21,16 +21,11 @@ from evaluations.metrics.insurance_metrics import get_reasoning_metric
 from evaluations.eval_config import eval_settings
 from evaluations.utils.custom_judge import get_eval_judge
 
-# 1. Initialize Wrapper and Global Judge
+# 1. Initialize Wrapper and Global Judge globally 
+# (This is safe because they do not hold test-specific state, and we don't want 
+# to reload the embedding model / LLM connections on every single loop)
 rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
-
-# 2. Initialize standard metrics globally for the suite using config thresholds
-recall_metric = ContextualRecallMetric(threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True)
-precision_metric = ContextualPrecisionMetric(threshold=eval_settings.precision_threshold, model=eval_judge, include_reason=True)
-faithfulness_metric = FaithfulnessMetric(threshold=eval_settings.faithfulness_threshold, model=eval_judge, include_reason=True)
-relevancy_metric = AnswerRelevancyMetric(threshold=eval_settings.relevancy_threshold, model=eval_judge, include_reason=True)
-reasoning_metric = get_reasoning_metric()
 
 @pytest.mark.parametrize(
     "case_id, query, source, expected_snippets, keywords, reasoning", 
@@ -38,7 +33,7 @@ reasoning_metric = get_reasoning_metric()
 )
 def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, reasoning):
     
-    # Pause to respect free tier API rate limits
+    # Outer pause to space out the start of each test case
     time.sleep(eval_settings.rate_limit_delay_seconds)
     
     # Standard Execution
@@ -59,6 +54,18 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
         expected_retrieval_context=expected_snippets
     )
     
+    # 2. Initialize standard metrics LOCALLY inside the test function.
+    # This guarantees that each test case evaluates using a fresh metric instance,
+    # preventing the internal scores and reasons from leaking across loops.
+    recall_metric = ContextualRecallMetric(threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True)
+    precision_metric = ContextualPrecisionMetric(threshold=eval_settings.precision_threshold, model=eval_judge, include_reason=True)
+    faithfulness_metric = FaithfulnessMetric(threshold=eval_settings.faithfulness_threshold, model=eval_judge, include_reason=True)
+    relevancy_metric = AnswerRelevancyMetric(threshold=eval_settings.relevancy_threshold, model=eval_judge, include_reason=True)
+    
+    # Ensure the custom factory also returns a fresh instance
+    reasoning_metric = get_reasoning_metric()
+    
+    # 3. Assert test sequentially to respect API rate limits
     assert_test(
         test_case, 
         [
@@ -67,6 +74,6 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
             faithfulness_metric, # Evaluates LLM hallucination
             relevancy_metric,    # Evaluates generic answer quality
             reasoning_metric     # Evaluates strict clause logic
-        ],
-        run_async=False # Run synchronously to ensure clear metric outputs in notebooks
+        ], 
+        run_async=False # Forces metrics to evaluate one-by-one
     )

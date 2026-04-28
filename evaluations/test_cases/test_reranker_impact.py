@@ -18,9 +18,6 @@ from evaluations.utils.custom_judge import get_eval_judge
 rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
 
-# We only care about Contextual Precision (ranking quality) for this test
-precision_metric = ContextualPrecisionMetric(threshold=eval_settings.precision_threshold, model=eval_judge, include_reason=True)
-
 @pytest.mark.parametrize("case_id, query, source, expected_snippets, keywords, reasoning", load_golden_dataset())
 def test_baseline_no_reranker(case_id, query, source, expected_snippets, keywords, reasoning):
     
@@ -41,7 +38,14 @@ def test_baseline_no_reranker(case_id, query, source, expected_snippets, keyword
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(test_case, [precision_metric])
+    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
+    precision_metric = ContextualPrecisionMetric(
+        threshold=eval_settings.precision_threshold, 
+        model=eval_judge, 
+        include_reason=True
+    )
+    
+    assert_test(test_case, [precision_metric], run_async=False)
 
 @pytest.mark.parametrize("case_id, query, source, expected_snippets, keywords, reasoning", load_golden_dataset())
 def test_advanced_with_reranker(case_id, query, source, expected_snippets, keywords, reasoning):
@@ -63,4 +67,11 @@ def test_advanced_with_reranker(case_id, query, source, expected_snippets, keywo
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(test_case, [precision_metric])
+    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
+    precision_metric = ContextualPrecisionMetric(
+        threshold=eval_settings.precision_threshold, 
+        model=eval_judge, 
+        include_reason=True
+    )
+    
+    assert_test(test_case, [precision_metric], run_async=False)

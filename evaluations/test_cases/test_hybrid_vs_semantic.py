@@ -18,9 +18,6 @@ from evaluations.utils.custom_judge import get_eval_judge
 rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
 
-# Contextual Recall checks if the required documents were fetched in the raw retrieval phase
-recall_metric = ContextualRecallMetric(threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True)
-
 # ---------------------------------------------------------
 # TEST A: Pure Semantic Baseline
 # ---------------------------------------------------------
@@ -45,7 +42,14 @@ def test_pure_semantic_search(case_id, query, source, expected_snippets, keyword
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(test_case, [recall_metric])
+    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
+    recall_metric = ContextualRecallMetric(
+        threshold=eval_settings.recall_threshold, 
+        model=eval_judge, 
+        include_reason=True
+    )
+    
+    assert_test(test_case, [recall_metric], run_async=False)
 
 # ---------------------------------------------------------
 # TEST B: Hybrid Search (Semantic + BM25)
@@ -71,4 +75,11 @@ def test_hybrid_search(case_id, query, source, expected_snippets, keywords, reas
         expected_retrieval_context=expected_snippets
     )
     
-    assert_test(test_case, [recall_metric])
+    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
+    recall_metric = ContextualRecallMetric(
+        threshold=eval_settings.recall_threshold, 
+        model=eval_judge, 
+        include_reason=True
+    )
+    
+    assert_test(test_case, [recall_metric], run_async=False)
