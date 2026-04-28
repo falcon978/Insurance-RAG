@@ -5,7 +5,7 @@
         "category": "waiting_period",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS - 1. b. Specified Disease/Procedure waiting period: Code - Excl02"
@@ -33,7 +33,7 @@
         "category": "financial_constraints",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
             "3.1. BASE BENEFITS - 3.1.3 Benefit: Cumulative Bonus"
@@ -88,7 +88,7 @@
         "category": "exclusions",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS - 2. c. Obesity/Weight control: Code - Excl06"
@@ -117,7 +117,7 @@
         "category": "coverage",
         "difficulty": "easy",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
             "6.1.7. Payment Terms"
@@ -144,7 +144,7 @@
         "category": "financial_constraints",
         "difficulty": "hard",
         "reasoning_hops": 3,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION B. BENEFITS - 2.7. Aggregate Deductible"
@@ -172,7 +172,7 @@
         "category": "coverage",
         "difficulty": "easy",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses - (iii) Advance Technology Methods"
@@ -226,7 +226,7 @@
         "category": "exclusions",
         "difficulty": "easy",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
             "4.2. Specific Exclusions"
@@ -253,7 +253,7 @@
         "category": "claims",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.2. Home Health Care",
             "SECTION B. BENEFITS - 1.2. Home Health Care"
@@ -280,7 +280,7 @@
         "category": "waiting_period",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
             "4.1. Standard Exclusions: (a) Waiting Periods: (ii) Named Ailment Waiting Period: Code-Excl02"
@@ -308,7 +308,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1.1. ii. In patient Care Dental Treatment",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS - 1. c. 30-day waiting period: Code - Excl03"
@@ -364,7 +364,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
             "4.1. Standard Exclusions - (b) Permanent Exclusions: 5. Cosmetic or plastic Surgery: (Code-Exc108)"
@@ -392,7 +392,7 @@
         "category": "financial_constraints",
         "difficulty": "hard",
         "reasoning_hops": 3,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION B. BENEFITS - 1.1.1. Note iii. Proportionate deduction on Room Rent"
@@ -420,7 +420,7 @@
         "category": "claims",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "6. OTHER TERMS AND CLAUSES - 6.1. Claims procedure and management",
             "6.1.4. Claims Intimation (ii)"
@@ -448,7 +448,7 @@
         "category": "edge_case",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "Operating Clause",
             "SECTION A. DEFINITIONS - 1.2. Specific Definitions: Def. 13. Family Members"
@@ -532,7 +532,7 @@
         "category": "financial_constraints",
         "difficulty": "hard",
         "reasoning_hops": 3,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.4 Benefit: Unlimited Automatic Recharge",
             "3.1.4 Benefit: Unlimited Automatic Recharge - (i) Conditions"
@@ -560,7 +560,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses",
             "3.1. BASE BENEFITS - 3.1.4 Benefit: Unlimited Automatic Recharge (iii)"
@@ -588,7 +588,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1.1. ii. Other Expenses",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS - 3. Specific Exclusions: l."
@@ -616,7 +616,7 @@
         "category": "edge_case",
         "difficulty": "easy",
         "reasoning_hops": 1,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [],
         "expected_keywords": [],
         "expected_span_hint": [],
@@ -631,7 +631,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
             "4.1. Standard Exclusions - (b) Permanent Exclusions: 12. Refractive Error: (Code-Excl15)"
@@ -659,7 +659,7 @@
         "category": "exclusions",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS - 2. f. Hazardous or Adventure Sports: Code - Excl09"
@@ -721,7 +721,7 @@
         "category": "financial_constraints",
         "difficulty": "hard",
         "reasoning_hops": 3,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1 (ix) Conditions applicable for Benefit 'Hospitalization Expenses'",
             "4.2. Specific Exclusions: 17. Expenses related to any kind of RMO charges"
@@ -749,7 +749,7 @@
         "category": "financial_constraints",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS - 1.1. Hospitalization Expenses",
             "SECTION D. GENERAL TERMS AND CLAUSES - 1.19. Utilization of Sum Insured"
@@ -777,7 +777,7 @@
         "category": "waiting_period",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3.1. BASE BENEFITS - 3.1.1. Benefit: Hospitalization Expenses (i) Benefit: In-patient Care",
             "4.1. Standard Exclusions - (a) Waiting Periods: (iii) 30-day waiting period-Code- Excl03"
@@ -839,7 +839,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (iii) Advance Technology Methods",
             "2. Definitions > 2.1. Standard Definitions > 2.1.18. Hospitalization"
@@ -866,7 +866,7 @@
         "category": "claims",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "5. General Terms And Clauses > Standard General Terms & Clauses > 5.3. Claim Settlement (provision for Penal Interest) > i.",
             "5. General Terms And Clauses > Standard General Terms & Clauses > 5.3. Claim Settlement (provision for Penal Interest) > ii."
@@ -920,7 +920,7 @@
         "category": "financial_constraints",
         "difficulty": "hard",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
             "SECTION D. GENERAL TERMS AND CLAUSES > Standard General Terms & Clauses > 1.19. Utilization of Sum Insured"
@@ -963,7 +963,7 @@
         "category": "waiting_period",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
             "SECTION C. WAITING PERIOD AND EXCLUSIONS > 1. Waiting Periods > b. Specified Disease/Procedure waiting period: Code - Excl02"
@@ -990,7 +990,7 @@
         "category": "exclusions",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (i) Benefit: In-patient Care",
             "4. Exclusions > 4.1. Standard Exclusions: > (b) Permanent Exclusions: > 1. Investigation & Evaluation: (Code-Excl04)"
@@ -1045,7 +1045,7 @@
         "category": "financial_constraints",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "hdfc",
+        "source": "optima_secure",
         "expected_sections": [
             "SECTION B. BENEFITS > 1. Base Coverage > 1.1. Hospitalization Expenses",
             "SECTION B. BENEFITS > 2. Optional Covers > 2.5. Secure Benefit"
@@ -1072,7 +1072,7 @@
         "category": "coverage",
         "difficulty": "medium",
         "reasoning_hops": 2,
-        "source": "care",
+        "source": "care_supreme",
         "expected_sections": [
             "3. Benefits Covered Under The Policy > 3.1. BASE BENEFITS > 3.1.1. Benefit: Hospitalization Expenses > (i) Benefit: In-patient Care",
             "3. Benefits Covered Under The Policy > 3.2. Optional Benefits > 3.2.14 Air Ambulance cover"
