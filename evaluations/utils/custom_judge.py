@@ -33,6 +33,7 @@ def get_eval_judge() -> GroqJudge:
     """
     groq_model = ChatGroq(
         model=eval_settings.judge_model_name, 
-        groq_api_key=eval_settings.groq_api_key
+        groq_api_key=eval_settings.groq_api_key,
+        max_retries=6
     )
     return GroqJudge(model=groq_model)
