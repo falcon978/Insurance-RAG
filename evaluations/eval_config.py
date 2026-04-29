@@ -18,8 +18,8 @@ class EvalSettings(BaseSettings):
     judge_model_name: str = os.getenv("JUDGE_MODEL_NAME", "llama-3.3-70b-versatile")
 
     # Top K Retrieval and Reranking Configurations
-    retrieve_top_k = int(os.getenv("retrieve_top_k", "15"))
-    rerank_top_k = int(os.getenv("rerank_top_k", "5"))
+    retrieve_top_k:int = int(os.getenv("retrieve_top_k", "15"))
+    rerank_top_k:int = int(os.getenv("rerank_top_k", "5"))
     
     # Passing Thresholds for DeepEval Standard Metrics
     recall_threshold: float = 0.8
