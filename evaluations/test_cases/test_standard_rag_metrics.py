@@ -17,7 +17,7 @@ from deepeval.metrics import (
 
 from evaluations.utils.rag_wrapper import EvalRAGWrapper
 from evaluations.datasets.data_loader import load_golden_dataset
-from evaluations.metrics.insurance_metrics import get_reasoning_metric
+from evaluations.metrics.insurance_metrics import get_reasoning_faithfulness_metric, get_answer_correctness_metric
 from evaluations.eval_config import eval_settings
 from evaluations.utils.custom_judge import get_eval_judge
 
@@ -63,7 +63,8 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
     relevancy_metric = AnswerRelevancyMetric(threshold=eval_settings.relevancy_threshold, model=eval_judge, include_reason=True)
     
     # Ensure the custom factory also returns a fresh instance
-    reasoning_metric = get_reasoning_metric()
+    correctness_metric = get_answer_correctness_metric()
+    reasoning_metric = get_reasoning_faithfulness_metric()
     
     # 3. Assert test sequentially to respect API rate limits
     assert_test(
@@ -73,7 +74,8 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
             precision_metric,    # Evaluates reranker/ranking (MRR)
             faithfulness_metric, # Evaluates LLM hallucination
             relevancy_metric,    # Evaluates generic answer quality
-            reasoning_metric     # Evaluates strict clause logic
+            correctness_metric,  # Did the LLM reach the correct legal outcome?
+            reasoning_metric     # Did the LLM use the right policy logic?
         ], 
         run_async=False # Forces metrics to evaluate one-by-one
     )

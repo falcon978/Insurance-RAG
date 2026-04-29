@@ -6,6 +6,9 @@ Utility functions for text formatting and metadata extraction.
 
 from typing import List
 from langchain_core.documents import Document
+import logging
+
+logger = logging.getLogger(__name__)
 
 def format_retrieved_context(docs: List[Document], policy_name: str) -> str:
     """
