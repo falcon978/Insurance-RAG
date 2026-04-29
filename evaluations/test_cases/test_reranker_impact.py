@@ -27,7 +27,7 @@ def test_baseline_no_reranker(case_id, query, source, expected_snippets, keyword
     actual_output, retrieved_contexts = rag.query(
         query=query, 
         source=source, # The wrapper handles the mapping!
-        retrieve_top_k=3, 
+        retrieve_top_k=eval_settings.retrieve_top_k, 
         rerank_top_k=0
     )
     
@@ -56,8 +56,8 @@ def test_advanced_with_reranker(case_id, query, source, expected_snippets, keywo
     actual_output, retrieved_contexts = rag.query(
         query=query, 
         source=source, # The wrapper handles the mapping!
-        retrieve_top_k=10, 
-        rerank_top_k=3
+        retrieve_top_k=eval_settings.retrieve_top_k, 
+        rerank_top_k=eval_settings.rerank_top_k
     )
     
     test_case = LLMTestCase(

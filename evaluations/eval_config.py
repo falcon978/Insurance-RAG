@@ -11,10 +11,15 @@ from pydantic_settings import BaseSettings
 class EvalSettings(BaseSettings):
     # API Keys
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
+    confident_api_key: str = os.getenv("CONFIDENT_API_KEY", "")
 
     # Judge Model Configuration
     # Using Llama 3.3 70B as the default strong judge
     judge_model_name: str = os.getenv("JUDGE_MODEL_NAME", "llama-3.3-70b-versatile")
+
+    # Top K Retrieval and Reranking Configurations
+    retrieve_top_k: int = 20
+    rerank_top_k: int = 10
     
     # Passing Thresholds for DeepEval Standard Metrics
     recall_threshold: float = 0.8

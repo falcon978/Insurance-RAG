@@ -40,8 +40,8 @@ def test_full_rag_triad(case_id, query, source, expected_snippets, keywords, rea
     actual_output, retrieved_contexts = rag.query(
         query=query, 
         source=source, # The wrapper handles the mapping!
-        retrieve_top_k=10, 
-        rerank_top_k=3
+        retrieve_top_k=eval_settings.retrieve_top_k, 
+        rerank_top_k=eval_settings.rerank_top_k
     )
     
     expected_output_str = f"Keywords to include: {', '.join(keywords)}. Logic: {reasoning}"

@@ -30,8 +30,8 @@ def test_pure_semantic_search(case_id, query, source, expected_snippets, keyword
     actual_output, retrieved_contexts = rag.query(
         query=query, 
         source=source, # The wrapper handles the mapping!
-        retrieve_top_k=10, 
-        rerank_top_k=0,
+        retrieve_top_k=eval_settings.retrieve_top_k, 
+        rerank_top_k=eval_settings.rerank_top_k, # Set it to 0 to isolate retrieval performance without the reranker influence
         strategy="semantic"
     )
     
@@ -63,8 +63,8 @@ def test_hybrid_search(case_id, query, source, expected_snippets, keywords, reas
     actual_output, retrieved_contexts = rag.query(
         query=query, 
         source=source, # The wrapper handles the mapping!
-        retrieve_top_k=10, 
-        rerank_top_k=0, 
+        retrieve_top_k=eval_settings.retrieve_top_k, 
+        rerank_top_k=eval_settings.rerank_top_k, # Set it to 0 to isolate retrieval performance without the reranker influence
         strategy="hybrid"
     )
     
