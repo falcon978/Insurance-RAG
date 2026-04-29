@@ -17,22 +17,8 @@ from .cleaner import clean_markdown_layout
 from .chunker import MarkdownHierarchicalChunker
 from .indexer import PolicyVectorStore
 
-# 1. Set up a basic console handler so logs actually have a place to print
-logging.basicConfig(
-    level=logging.ERROR,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
 
-# 2. Mute specific noisy libraries (just in case)
-logging.getLogger("langchain").setLevel(logging.ERROR)
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-
-# 3. WAKE UP your specific modules! (Assuming they use logger = logging.getLogger(__name__))
-logging.getLogger("extractor").setLevel(logging.INFO)
-logging.getLogger("chunker").setLevel(logging.INFO)
-logging.getLogger("indexer").setLevel(logging.INFO)
-logging.getLogger("pipeline").setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ExtractionResult:
@@ -70,7 +56,7 @@ class ExtractionPipeline:
 
     def _log(self, msg: str):
         if self.verbose:
-            print(msg)
+            logger.info(msg)
 
     def run(self) -> ExtractionResult:
         if not self.pdf_path.exists():

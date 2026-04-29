@@ -9,6 +9,9 @@ swap out, or extend independently of the rest of the pipeline.
 
 import re
 import unicodedata
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

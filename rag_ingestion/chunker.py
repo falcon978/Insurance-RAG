@@ -33,7 +33,7 @@ class MarkdownHierarchicalChunker:
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
-            separators=["\n\n", "\n", " ", ""]
+            separators=["\n\n", "\n", ". ", " ", ""]
         )
 
     def chunk(self, md_text: str, source_file: str) -> list[PolicyChunk]:

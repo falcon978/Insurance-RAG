@@ -19,7 +19,7 @@ class ContextReranker:
     Unlike Bi-Encoders (which process queries and docs separately), Cross-Encoders process 
     them simultaneously for highly accurate semantic matching.
     """
-    def __init__(self, model_name: str = 'cross-encoder/ms-marco-MiniLM-L-6-v2', device: str = "cpu"):
+    def __init__(self, model_name: str = 'BAAI/bge-reranker-v2-m3', device: str = "cpu"):
         logger.info(f"Loading Cross-Encoder model: {model_name} on {device}")
         self.model = CrossEncoder(model_name, device=device)
         

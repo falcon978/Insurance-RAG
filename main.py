@@ -4,6 +4,8 @@ main.py
 FastAPI Backend. Orchestrates ingestion and RAG querying.
 """
 import os
+import logging
+import sys
 import shutil
 import tempfile
 import urllib.request
@@ -20,6 +22,15 @@ from schemas import (
     CollectionListResponse, 
     StandardResponse
 )
+
+#  Set up a basic console handler so logs actually have a place to print
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Insurance RAG API")
 

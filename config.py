@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # MODEL CONFIGURATION
     embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")
-    rerank_model_name: str = os.getenv("RERANK_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    rerank_model_name: str = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
     llm_model_name: str = os.getenv("LLM_MODEL_NAME", "gemini-3-flash-preview")
     
     # LLM and Device Config

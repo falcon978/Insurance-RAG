@@ -7,6 +7,7 @@ relies on a pre-initialized BM25 retriever for high-speed lexical search.
 """
 
 import logging
+import hashlib
 from typing import List, Optional
 from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
@@ -76,8 +77,9 @@ class DocumentSearch:
             for strategy_name, docs in results.items():
                 weight = weights[strategy_name]
                 for rank, doc in enumerate(docs, start=1):
+                    
                     # Use page_content as a unique ID to deduplicate chunks
-                    doc_id = doc.page_content 
+                    doc_id = hashlib.md5(doc.page_content.encode('utf-8')).hexdigest()
                     
                     if doc_id not in fused_scores:
                         fused_scores[doc_id] = {"doc": doc, "score": 0.0}

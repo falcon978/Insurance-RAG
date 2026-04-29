@@ -12,6 +12,7 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from rag.utils import format_retrieved_context
+from rag.llm_schemas import PolicyDecision, ComparisonResult
 
 logger = logging.getLogger(__name__)
 
@@ -27,18 +28,9 @@ class ResponseGenerator:
             api_key=api_key
         )
 
-    def _extract_json(self, raw_output: str) -> str:
-        """
-        Uses regex to isolate the JSON object.
-        (LangChain lists are now safely handled upstream by StrOutputParser).
-        """
-        # We know raw_output is safely a string now!
-        match = re.search(r'(\{.*\}|\[.*\])', raw_output, re.DOTALL)
-        if match:
-            return match.group(1)
-            
-        # Fallback: strip markdown if regex fails but structure exists
-        return raw_output.replace("```json", "").replace("```", "").strip()
+        # 2. Create strictly bound adjudicators for Pass 1
+        self.adjudicator_single = self.llm.with_structured_output(PolicyDecision)
+        self.adjudicator_compare = self.llm.with_structured_output(ComparisonResult)
 
     def generate_single_answer(self, query: str, docs: List[Document], policy_name: str, history: Optional[List] = None) -> str:
         """Runs the two-pass pipeline for a single policy with history."""
@@ -49,15 +41,15 @@ class ResponseGenerator:
         
         # --- PASS 1: The Adjudicator (Deterministic JSON) ---
         from rag.prompts import single_policy_decision_template
-        decision_chain = single_policy_decision_template | self.llm | StrOutputParser()
+        decision_chain = single_policy_decision_template | self.adjudicator_single
         
         decision_response = decision_chain.invoke({
-            "context": context_string, 
+            "context": context_string,
             "query": query,
             "history": history or []
         })
         
-        clean_json = self._extract_json(decision_response)
+        clean_json = decision_response.model_dump_json(indent=2)
         logger.info(f"=== PASS 1 ADJUDICATOR JSON ===\n{clean_json}\n==============================")
         
         # --- PASS 2: The Explainer (Markdown UI) ---
@@ -78,7 +70,7 @@ class ResponseGenerator:
         from rag.prompts import compare_policies_decision_template, compare_policies_explainer_template
         
         # PASS 1: Adjudicator
-        decision_chain = compare_policies_decision_template | self.llm | StrOutputParser()
+        decision_chain = compare_policies_decision_template | self.adjudicator_compare
         decision_response = decision_chain.invoke({
             "context_a": context_a, 
             "context_b": context_b, 
@@ -86,7 +78,7 @@ class ResponseGenerator:
             "history": history or []
         })
         
-        clean_json = self._extract_json(decision_response)
+        clean_json = decision_response.model_dump_json(indent=2)
         
         # PASS 2: Explainer
         explainer_chain = compare_policies_explainer_template | self.llm | StrOutputParser()
