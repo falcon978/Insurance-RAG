@@ -6,6 +6,7 @@ Dataclasses that represent the core units flowing through the pipeline.
 
 from dataclasses import dataclass, field
 
+
 @dataclass
 class PolicyChunk:
     """
@@ -25,6 +26,7 @@ class PolicyChunk:
     token_estimate  : rough token count (len(text) // 4)
     metadata        : extra flags — has_table, has_list, chunk_index, etc.
     """
+
     chunk_id: str
     source_file: str
     page_start: int

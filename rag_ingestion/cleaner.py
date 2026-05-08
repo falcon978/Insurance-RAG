@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def clean_block_text(text: str) -> str:
     """
     Full cleaning pass for a raw PDF text block.
@@ -51,6 +52,7 @@ def clean_section_text(text: str) -> str:
 # Internal helpers  (prefix _ = not imported by default)
 # ---------------------------------------------------------------------------
 
+
 def _normalize_unicode(text: str) -> str:
     """
     NFC normalisation + manual replacement of common PDF glitches:
@@ -63,22 +65,22 @@ def _normalize_unicode(text: str) -> str:
     text = unicodedata.normalize("NFC", text)
 
     replacements = {
-        "\ufb01": "fi",   # ﬁ
-        "\ufb02": "fl",   # ﬂ
-        "\ufb00": "ff",   # ﬀ
+        "\ufb01": "fi",  # ﬁ
+        "\ufb02": "fl",  # ﬂ
+        "\ufb00": "ff",  # ﬀ
         "\ufb03": "ffi",  # ﬃ
         "\ufb04": "ffl",  # ﬄ
-        "\u2018": "'",    # '
-        "\u2019": "'",    # '
-        "\u201c": '"',    # "
-        "\u201d": '"',    # "
-        "\u2013": "-",    # en dash
-        "\u2014": "-",    # em dash
-        "\u2022": "•",    # bullet (already bullet, normalise variants)
-        "\u25cf": "•",    # ●
-        "\u25e6": "•",    # ◦
-        "\u2023": "•",    # ➣
-        "\xa0":   " ",    # non-breaking space
+        "\u2018": "'",  # '
+        "\u2019": "'",  # '
+        "\u201c": '"',  # "
+        "\u201d": '"',  # "
+        "\u2013": "-",  # en dash
+        "\u2014": "-",  # em dash
+        "\u2022": "•",  # bullet (already bullet, normalise variants)
+        "\u25cf": "•",  # ●
+        "\u25e6": "•",  # ◦
+        "\u2023": "•",  # ➣
+        "\xa0": " ",  # non-breaking space
     }
     for char, replacement in replacements.items():
         text = text.replace(char, replacement)
@@ -123,40 +125,32 @@ def clean_markdown_layout(md_text: str) -> str:
     Removes repetitive headers, promotes major sections, and demotes fake clauses.
     """
     import re
-    
+
     # A. Delete repetitive page headers/footers completely
     cleaned = re.sub(
-        r'^##\s+\*\*(Policy Wording|my:\s*Optima Secure|HDFC ERGO General Insurance Company Limited).*?$', 
-        '', 
-        md_text, 
-        flags=re.MULTILINE | re.IGNORECASE
+        r"^##\s+\*\*(Policy Wording|my:\s*Optima Secure|HDFC ERGO General Insurance Company Limited).*?$",
+        "",
+        md_text,
+        flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # B. Promote SECTION, PART, and ANNEXURE to Major Sections (#)
     cleaned = re.sub(
-        r'^##\s+(\*\*(?:SECTION|PART|ANNEXURE).*?\*\*)', 
-        r'# \1', 
-        cleaned, 
-        flags=re.MULTILINE | re.IGNORECASE
+        r"^##\s+(\*\*(?:SECTION|PART|ANNEXURE).*?\*\*)",
+        r"# \1",
+        cleaned,
+        flags=re.MULTILINE | re.IGNORECASE,
     )
 
     # C. Demote "Fake" Clauses (Normal sentences that got tagged as ##)
-    cleaned = re.sub(
-        r'^##\s+(?!\*\*)(.*?)$', 
-        r'\1', 
-        cleaned, 
-        flags=re.MULTILINE
-    )
+    cleaned = re.sub(r"^##\s+(?!\*\*)(.*?)$", r"\1", cleaned, flags=re.MULTILINE)
 
     # D. Demote Orphaned List Items (e.g., "## **b.**" or "## **j.**")
     cleaned = re.sub(
-        r'^##\s+\*\*([a-z]\.)\*\*\s*$', 
-        r'**\1**', 
-        cleaned, 
-        flags=re.MULTILINE
+        r"^##\s+\*\*([a-z]\.)\*\*\s*$", r"**\1**", cleaned, flags=re.MULTILINE
     )
 
     # E. Clean up excess blank lines
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
-    
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
     return cleaned

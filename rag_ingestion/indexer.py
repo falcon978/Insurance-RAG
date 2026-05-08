@@ -3,12 +3,12 @@ indexer.py
 -----------------------
 Phase 4: Vector Embedding and Local Lexical Indexing.
 
-This module acts as a factory for the vector database, supporting both 
-Chroma (local) and Pinecone (cloud). It also handles the persistence of 
+This module acts as a factory for the vector database, supporting both
+Chroma (local) and Pinecone (cloud). It also handles the persistence of
 a local text corpus to allow for decoupled BM25 keyword search.
 
 Key Features:
-  - Idempotent Upserts: Uses your custom `chunk_id` so re-running the script 
+  - Idempotent Upserts: Uses your custom `chunk_id` so re-running the script
     updates existing chunks rather than duplicating them.
   - Namespace Checks: Checks if the vector namespace is already populated before hitting APIs.
   - BM25 Deduplication: Prevents bloating the local pickle file with duplicate documents.
@@ -21,6 +21,7 @@ from typing import List, Tuple
 
 # Conditional imports for Vector DB providers
 from langchain_chroma import Chroma
+
 try:
     from langchain_pinecone import PineconeVectorStore
 except ImportError:
@@ -34,43 +35,50 @@ from .models import PolicyChunk
 
 logger = logging.getLogger(__name__)
 
+
 class PolicyVectorStore:
     def __init__(self, collection_name: str, device: str = "cpu"):
         """
         Initializes the embedding model and connects to the configured Vector DB.
-        
+
         Args:
             collection_name: The name of the collection (Chroma) or Namespace (Pinecone).
             device: 'cpu' or 'cuda' for embedding generation.
         """
         self.collection_name = collection_name
-        
+
         # 1. Initialize Shared Embedding Model Dynamically
         logging.info(f"Initializing embedding model ({settings.embed_model_name})...")
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.embed_model_name,
-            model_kwargs={'device': device}, 
-            encode_kwargs={'normalize_embeddings': True} # Required for cosine similarity
+            model_kwargs={"device": device},
+            encode_kwargs={
+                "normalize_embeddings": True
+            },  # Required for cosine similarity
         )
-        
+
         # 2. Factory Initialization: Route to Pinecone or Chroma
         if settings.vector_db_type == "pinecone":
             if PineconeVectorStore is None:
                 raise ImportError("langchain-pinecone is not installed.")
-            
-            logging.info(f"Connecting to Pinecone Index: {settings.pinecone_index_name} (Namespace: {collection_name})")
+
+            logging.info(
+                f"Connecting to Pinecone Index: {settings.pinecone_index_name} (Namespace: {collection_name})"
+            )
             self.vector_store = PineconeVectorStore(
                 index_name=settings.pinecone_index_name,
                 embedding=self.embeddings,
                 pinecone_api_key=settings.pinecone_api_key,
-                namespace=collection_name
+                namespace=collection_name,
             )
         else:
-            logging.info(f"Connecting to local Chroma database at: {settings.chroma_dir}")
+            logging.info(
+                f"Connecting to local Chroma database at: {settings.chroma_dir}"
+            )
             self.vector_store = Chroma(
                 collection_name=collection_name,
                 embedding_function=self.embeddings,
-                persist_directory=settings.chroma_dir
+                persist_directory=settings.chroma_dir,
             )
 
     def _get_bm25_path(self) -> str:
@@ -89,8 +97,11 @@ class PolicyVectorStore:
             if settings.vector_db_type == "pinecone":
                 # Pinecone specific stats check
                 stats = self.vector_store._index.describe_index_stats()
-                namespaces = stats.get('namespaces', {})
-                if self.collection_name in namespaces and namespaces[self.collection_name]['vector_count'] > 0:
+                namespaces = stats.get("namespaces", {})
+                if (
+                    self.collection_name in namespaces
+                    and namespaces[self.collection_name]["vector_count"] > 0
+                ):
                     return True
             else:
                 # ChromaDB specific stats check
@@ -99,10 +110,12 @@ class PolicyVectorStore:
                     return True
         except Exception as e:
             logging.warning(f"Could not verify namespace stats, assuming empty: {e}")
-            
+
         return False
 
-    def _prepare_documents(self, chunks: List[PolicyChunk]) -> Tuple[List[Document], List[str]]:
+    def _prepare_documents(
+        self, chunks: List[PolicyChunk]
+    ) -> Tuple[List[Document], List[str]]:
         """Transforms raw PolicyChunks into Langchain Documents with flattened metadata."""
         documents = []
         ids = []
@@ -111,7 +124,7 @@ class PolicyVectorStore:
             # Flatten metadata for database cross-compatibility
             # Note: We inject chunk_id into metadata here to help with BM25 deduplication later
             flat_metadata = {
-                "chunk_id": chunk.chunk_id, 
+                "chunk_id": chunk.chunk_id,
                 "source_file": chunk.source_file,
                 "page_start": chunk.page_start,
                 "page_end": chunk.page_end,
@@ -122,19 +135,23 @@ class PolicyVectorStore:
                 "has_table": chunk.metadata.get("has_table", False),
                 "has_list": chunk.metadata.get("has_list", False),
                 "chunk_index": chunk.metadata.get("chunk_index", 0),
-                "char_count": chunk.metadata.get("char_count", 0)
+                "char_count": chunk.metadata.get("char_count", 0),
             }
 
             doc = Document(page_content=chunk.text, metadata=flat_metadata)
             documents.append(doc)
             ids.append(chunk.chunk_id)
-            
+
         return documents, ids
 
-    def _upsert_to_vector_db(self, documents: List[Document], ids: List[str], batch_size: int):
+    def _upsert_to_vector_db(
+        self, documents: List[Document], ids: List[str], batch_size: int
+    ):
         """Handles batch upserting embeddings into the configured Vector DB."""
         total_batches = (len(documents) + batch_size - 1) // batch_size
-        logging.info(f"Adding {len(documents)} chunks to {settings.vector_db_type.upper()} in {total_batches} batches...")
+        logging.info(
+            f"Adding {len(documents)} chunks to {settings.vector_db_type.upper()} in {total_batches} batches..."
+        )
 
         for i in range(0, len(documents), batch_size):
             batch_docs = documents[i : i + batch_size]
@@ -148,17 +165,25 @@ class PolicyVectorStore:
         try:
             existing_documents = []
             existing_ids = set()
-            
+
             # 1. Load existing corpus to prevent complete overwrite
             if os.path.exists(bm25_path):
                 with open(bm25_path, "rb") as f:
                     existing_documents = pickle.load(f)
                     # Track existing chunk_ids to avoid duplicating the same file
-                    existing_ids = {doc.metadata.get('chunk_id') for doc in existing_documents if doc.metadata.get('chunk_id')}
-            
+                    existing_ids = {
+                        doc.metadata.get("chunk_id")
+                        for doc in existing_documents
+                        if doc.metadata.get("chunk_id")
+                    }
+
             # 2. Filter for strictly NEW documents
-            new_documents = [doc for doc in documents if doc.metadata.get('chunk_id') not in existing_ids]
-            
+            new_documents = [
+                doc
+                for doc in documents
+                if doc.metadata.get("chunk_id") not in existing_ids
+            ]
+
             if not new_documents:
                 logging.info(f"No new documents to add to BM25 corpus at: {bm25_path}")
                 return
@@ -167,8 +192,10 @@ class PolicyVectorStore:
             existing_documents.extend(new_documents)
             with open(bm25_path, "wb") as f:
                 pickle.dump(existing_documents, f)
-                
-            logging.info(f"Lexical corpus persisted! Added {len(new_documents)} new documents for local BM25 search at: {bm25_path}")
+
+            logging.info(
+                f"Lexical corpus persisted! Added {len(new_documents)} new documents for local BM25 search at: {bm25_path}"
+            )
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")
 
@@ -184,7 +211,9 @@ class PolicyVectorStore:
 
         # 1. Handle Vector DB Upsert (with Idempotent Check)
         if self._is_namespace_populated():
-            logging.info(f"Namespace/Collection '{self.collection_name}' already contains vectors. Skipping Vector DB ingestion.")
+            logging.info(
+                f"Namespace/Collection '{self.collection_name}' already contains vectors. Skipping Vector DB ingestion."
+            )
         else:
             self._upsert_to_vector_db(documents, ids, batch_size)
 
@@ -195,11 +224,10 @@ class PolicyVectorStore:
 
     def get_retriever(self, k: int = 4):
         """
-        Returns a standard LangChain retriever interface. 
-        Note: This is used for pure semantic retrieval. 
+        Returns a standard LangChain retriever interface.
+        Note: This is used for pure semantic retrieval.
         For Hybrid search, the RAGEngine will build a custom search engine.
         """
         return self.vector_store.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": k}
+            search_type="similarity", search_kwargs={"k": k}
         )

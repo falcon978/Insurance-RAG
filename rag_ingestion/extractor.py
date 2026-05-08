@@ -12,6 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PDFExtractor:
     """
     Extracts Markdown and document metadata from a PDF.
@@ -25,21 +26,21 @@ class PDFExtractor:
         Extracts Markdown while injecting hidden page markers.
         """
         logger.info(f"Extracting markdown from {self.pdf_path.name}")
-        
+
         # page_chunks=True returns a list of dictionaries (one per page)
         page_data = pymupdf4llm.to_markdown(self.pdf_path, page_chunks=True)
-        
+
         full_md = ""
         for page in page_data:
             # PyMuPDF uses 1-based indexing
             display_page_num = page.get("metadata").get("page_number")
-            
+
             text = page.get("text", "")
-            
+
             # Inject a custom marker at the top of every page's text for later retrieval
             marker = f"\n\n[__RAG_PIPELINE_PAGE_{display_page_num}__]\n\n"
             full_md += marker + text
-            
+
         return full_md
 
     def get_document_metadata(self) -> dict:
@@ -47,11 +48,11 @@ class PDFExtractor:
         with pymupdf.open(str(self.pdf_path)) as doc:
             meta = doc.metadata or {}
             return {
-                "title"      : meta.get("title",   ""),
-                "author"     : meta.get("author",  ""),
-                "subject"    : meta.get("subject", ""),
-                "creator"    : meta.get("creator", ""),
-                "page_count" : len(doc),
+                "title": meta.get("title", ""),
+                "author": meta.get("author", ""),
+                "subject": meta.get("subject", ""),
+                "creator": meta.get("creator", ""),
+                "page_count": len(doc),
                 "source_file": self.pdf_path.name,
             }
 

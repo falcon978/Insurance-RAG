@@ -10,30 +10,31 @@ from pathlib import Path
 import logging
 import sys
 
-from config import settings # Added centralized settings
+from config import settings  # Added centralized settings
 from .models import PolicyChunk
 from .extractor import PDFExtractor
 from .cleaner import clean_markdown_layout
 from .chunker import MarkdownHierarchicalChunker
 from .indexer import PolicyVectorStore
 
-
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ExtractionResult:
     """Everything produced by one pipeline run."""
-    doc_meta  : dict
-    toc       : list[dict]
-    stats     : dict
-    chunks    : list[PolicyChunk] = field(default_factory=list)
+
+    doc_meta: dict
+    toc: list[dict]
+    stats: dict
+    chunks: list[PolicyChunk] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "document": self.doc_meta,
-            "toc"     : self.toc,
-            "stats"   : self.stats,
-            "chunks"  : [asdict(c) for c in self.chunks],
+            "toc": self.toc,
+            "stats": self.stats,
+            "chunks": [asdict(c) for c in self.chunks],
         }
 
 
@@ -44,7 +45,7 @@ class ExtractionPipeline:
         collection_name: str = "insurance_policies",
         chunk_size: int = 1200,
         chunk_overlap: int = 150,
-        device: str = settings.hf_device, # Pulls from config
+        device: str = settings.hf_device,  # Pulls from config
         verbose: bool = True,
     ):
         self.pdf_path = Path(pdf_path)
@@ -68,9 +69,9 @@ class ExtractionPipeline:
         # ── Phase 1: Markdown Extraction ──────────────────────────────
         self._log("Phase 1/3 — Extracting Markdown via Layout Engine …")
         extractor = PDFExtractor(str(self.pdf_path))
-        doc_meta  = extractor.get_document_metadata()
-        toc       = extractor.get_toc()
-        md_text   = extractor.extract_markdown_with_pages()
+        doc_meta = extractor.get_document_metadata()
+        toc = extractor.get_toc()
+        md_text = extractor.extract_markdown_with_pages()
 
         # ── Phase 1.5: Markdown Cleaning ──────────────────────────────
         clean_md = clean_markdown_layout(md_text)
@@ -78,8 +79,7 @@ class ExtractionPipeline:
         # ── Phase 2: Chunk & Inject ───────────────────────────────────
         self._log("Phase 2/3 — Semantic Chunking & Context Injection …")
         chunker = MarkdownHierarchicalChunker(
-            chunk_size=self.chunk_size, 
-            chunk_overlap=self.chunk_overlap
+            chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
         )
         chunks = chunker.chunk(clean_md, self.pdf_path.name)
         self._log(f"           {len(chunks)} RAG chunks created")
@@ -87,24 +87,24 @@ class ExtractionPipeline:
         # ── Phase 3: Index ────────────────────────────────────────────
         # Dynamically log the correct database type
         self._log(f"Phase 3/3 — Indexing into {settings.vector_db_type.upper()} …")
-        
+
         store = PolicyVectorStore(
             collection_name=self.collection_name,
             device=self.device,
-        ) # Removed the invalid persist_directory argument!
-        
+        )  # Removed the invalid persist_directory argument!
+
         store.index_chunks(chunks)
 
-        elapsed  = round(time.time() - t0, 2)
+        elapsed = round(time.time() - t0, 2)
         avg_chars = int(sum(len(c.text) for c in chunks) / max(len(chunks), 1))
 
         stats = {
-            "total_chunks"      : len(chunks),
-            "avg_chunk_chars"   : avg_chars,
+            "total_chunks": len(chunks),
+            "avg_chunk_chars": avg_chars,
             "avg_token_estimate": avg_chars // 4,
-            "indexed_to_db"     : True,
-            "database_type"     : settings.vector_db_type, # Reflects Pinecone or Chroma
-            "elapsed_seconds"   : elapsed,
+            "indexed_to_db": True,
+            "database_type": settings.vector_db_type,  # Reflects Pinecone or Chroma
+            "elapsed_seconds": elapsed,
         }
 
         self._log(
@@ -113,8 +113,8 @@ class ExtractionPipeline:
         )
 
         return ExtractionResult(
-            doc_meta = doc_meta,
-            toc      = toc,
-            stats    = stats,
-            chunks   = chunks,
+            doc_meta=doc_meta,
+            toc=toc,
+            stats=stats,
+            chunks=chunks,
         )

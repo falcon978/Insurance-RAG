@@ -7,7 +7,7 @@ import re
 _MAJOR_SECTION_RE = re.compile(
     r"^(?:SECTION|PART|CHAPTER|ARTICLE)\s+[A-Z0-9]+[\s\-–:\.]+.+"
     r"|^(\d+\.)(?!\.?\d)\s+\S{2,}",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # ---------------------------------------------------------------------------
@@ -18,17 +18,17 @@ _CLAUSE_RE = re.compile(
     r"^("
     r"(?:Def\.?|Definition|Cond\.?|Condition|Option|Opt\.?)\s*\d+[\.\d]*"
     r"|\d+\.\d+[\.\d]*"
-    r"|\(\s*[ivxIVX]+\s*\)"  
-    r"|[ivxIVX]+\."          
-    r"|\(\s*[a-zA-Z]\s*\)"   
-    r"|[a-zA-Z]\."           
-    r")\s*(.*)$",            
-    re.IGNORECASE
+    r"|\(\s*[ivxIVX]+\s*\)"
+    r"|[ivxIVX]+\."
+    r"|\(\s*[a-zA-Z]\s*\)"
+    r"|[a-zA-Z]\."
+    r")\s*(.*)$",
+    re.IGNORECASE,
 )
 
 # ---------------------------------------------------------------------------
 # NOT A SECTION (Blocklist)
-# Prevents short, bolded warning labels or table headers from being 
+# Prevents short, bolded warning labels or table headers from being
 # accidentally classified as structural document headings.
 # ---------------------------------------------------------------------------
 _NOT_A_SECTION = re.compile(

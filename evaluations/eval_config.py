@@ -5,8 +5,10 @@ Centralized configuration for the DeepEval test suite.
 Manages judge models, API keys, metric thresholds, and rate limits.
 By keeping this modular, you can easily swap models or strictness for different environments.
 """
+
 import os
 from pydantic_settings import BaseSettings
+
 
 class EvalSettings(BaseSettings):
     # API Keys
@@ -18,15 +20,15 @@ class EvalSettings(BaseSettings):
     judge_model_name: str = os.getenv("JUDGE_MODEL_NAME", "llama-3.3-70b-versatile")
 
     # Top K Retrieval and Reranking Configurations
-    retrieve_top_k:int = int(os.getenv("retrieve_top_k", "15"))
-    rerank_top_k:int = int(os.getenv("rerank_top_k", "5"))
-    
+    retrieve_top_k: int = int(os.getenv("retrieve_top_k", "15"))
+    rerank_top_k: int = int(os.getenv("rerank_top_k", "5"))
+
     # Passing Thresholds for DeepEval Standard Metrics
     recall_threshold: float = 0.8
     precision_threshold: float = 0.8
     faithfulness_threshold: float = 0.9
     relevancy_threshold: float = 0.8
-    
+
     # Passing Threshold for Custom Rubrics (GEval)
     reasoning_threshold: float = 0.7
 
@@ -37,6 +39,7 @@ class EvalSettings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+
 
 # Instantiate the settings so they can be imported globally
 eval_settings = EvalSettings()

@@ -1,7 +1,7 @@
 """
 engine.py
 ---------
-The central orchestrator for the Insurance RAG pipeline. 
+The central orchestrator for the Insurance RAG pipeline.
 
 It manages:
 1. Provider-Agnostic Vector DB connections (Chroma or Pinecone).
@@ -16,6 +16,7 @@ import logging
 from typing import List, Optional
 
 from langchain_chroma import Chroma
+
 try:
     from langchain_pinecone import PineconeVectorStore
 except ImportError:
@@ -32,28 +33,29 @@ from rag.generator import ResponseGenerator
 
 logger = logging.getLogger(__name__)
 
+
 class InsuranceRAGEngine:
     def __init__(self, gemini_api_key: str):
         """
         Initializes the engine with shared components and an empty BM25 cache.
         """
-        logger.info(f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()})")
-        
+        logger.info(
+            f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()})"
+        )
+
         # 1. Initialize Shared Models Dynamically
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.embed_model_name,
-            model_kwargs={'device': settings.hf_device}, 
-            encode_kwargs={'normalize_embeddings': True}
+            model_kwargs={"device": settings.hf_device},
+            encode_kwargs={"normalize_embeddings": True},
         )
         self.reranker = ContextReranker(
-            model_name=settings.rerank_model_name,
-            device=settings.hf_device
+            model_name=settings.rerank_model_name, device=settings.hf_device
         )
         self.generator = ResponseGenerator(
-            api_key=gemini_api_key,
-            model_name=settings.llm_model_name
+            api_key=gemini_api_key, model_name=settings.llm_model_name
         )
-        
+
         # Cache to store BM25 index in memory to avoid rebuilding every query
         self._bm25_cache = {}
 
@@ -64,15 +66,17 @@ class InsuranceRAGEngine:
 
         # Lexical corpus is always local for low-latency keyword search
         corpus_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
-        
+
         if not os.path.exists(corpus_path):
-            logger.warning(f"BM25 corpus missing at {corpus_path}. Performance may degrade.")
+            logger.warning(
+                f"BM25 corpus missing at {corpus_path}. Performance may degrade."
+            )
             return None
 
         try:
             with open(corpus_path, "rb") as f:
                 docs = pickle.load(f)
-            
+
             # Initializing BM25 is CPU-intensive; we do this once per policy
             retriever = BM25Retriever.from_documents(docs)
             self._bm25_cache[collection_name] = retriever
@@ -82,30 +86,32 @@ class InsuranceRAGEngine:
             logger.error(f"Failed to initialize BM25 index: {e}")
             return None
 
-    def _get_search_engine(self, collection_name: str, retrieve_top_k: int) -> DocumentSearch:
+    def _get_search_engine(
+        self, collection_name: str, retrieve_top_k: int
+    ) -> DocumentSearch:
         """Factory method to connect to the configured Vector DB (Chroma or Pinecone)."""
         if settings.vector_db_type == "pinecone":
             vector_store = PineconeVectorStore(
                 index_name=settings.pinecone_index_name,
                 embedding=self.embeddings,
                 namespace=collection_name,
-                pinecone_api_key=settings.pinecone_api_key
+                pinecone_api_key=settings.pinecone_api_key,
             )
         else:
             vector_store = Chroma(
                 collection_name=collection_name,
                 embedding_function=self.embeddings,
-                persist_directory=settings.chroma_dir
+                persist_directory=settings.chroma_dir,
             )
-        
+
         # Fetch the local BM25 retriever
         bm25_retriever = self._load_bm25_retriever(collection_name)
-        
+
         return DocumentSearch(
-            vector_store=vector_store, 
-            bm25_retriever=bm25_retriever, 
-            strategy="hybrid", 
-            top_k=retrieve_top_k
+            vector_store=vector_store,
+            bm25_retriever=bm25_retriever,
+            strategy="hybrid",
+            top_k=retrieve_top_k,
         )
 
     def _format_policy_name(self, collection_name: str) -> str:
@@ -113,59 +119,69 @@ class InsuranceRAGEngine:
         return collection_name.replace("insurance_", "").replace("_", " ").title()
 
     def query_single_policy(
-        self, 
-        query: str, 
-        collection_name: str, 
-        history: Optional[List] = None, 
-        max_history_len: int = 6, # Keeps last 3 Human-AI turns
-        **kwargs
+        self,
+        query: str,
+        collection_name: str,
+        history: Optional[List] = None,
+        max_history_len: int = 6,  # Keeps last 3 Human-AI turns
+        **kwargs,
     ) -> str:
         """3-Step Stateful Pipeline: Retrieve -> Rerank -> Generate with Sliding Window Memory."""
-        
+
         # SLIDING WINDOW: Trim history before sending to the LLM
-        active_history = (history[-max_history_len:] if history else [])
-        
-        search_engine = self._get_search_engine(collection_name, kwargs.get('retrieve_top_k', 15))
-        
+        active_history = history[-max_history_len:] if history else []
+
+        search_engine = self._get_search_engine(
+            collection_name, kwargs.get("retrieve_top_k", 15)
+        )
+
         # 1. Hybrid Retrieval
         broad_docs = search_engine.search(query)
-        
+
         # 2. Reranking
-        best_docs = self.reranker.rerank(query, broad_docs, top_k=kwargs.get('rerank_top_k', 3))
-        
+        best_docs = self.reranker.rerank(
+            query, broad_docs, top_k=kwargs.get("rerank_top_k", 3)
+        )
+
         # 3. Two-Pass Generation with Trimmed History
         return self.generator.generate_single_answer(
-            query=query, 
-            docs=best_docs, 
+            query=query,
+            docs=best_docs,
             policy_name=self._format_policy_name(collection_name),
-            history=active_history
+            history=active_history,
         )
 
     def compare_policies(
-        self, 
-        query: str, 
-        collection_a: str, 
-        collection_b: str, 
-        history: Optional[List] = None, 
+        self,
+        query: str,
+        collection_a: str,
+        collection_b: str,
+        history: Optional[List] = None,
         max_history_len: int = 4,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Runs the comparison pipeline with conversational state."""
-        
-        active_history = (history[-max_history_len:] if history else [])
-        
-        eng_a = self._get_search_engine(collection_a, kwargs.get('retrieve_top_k', 15))
-        eng_b = self._get_search_engine(collection_b, kwargs.get('retrieve_top_k', 15))
-        
+
+        active_history = history[-max_history_len:] if history else []
+
+        eng_a = self._get_search_engine(collection_a, kwargs.get("retrieve_top_k", 15))
+        eng_b = self._get_search_engine(collection_b, kwargs.get("retrieve_top_k", 15))
+
         # Process Policy A
-        best_a = self.reranker.rerank(query, eng_a.search(query), top_k=kwargs.get('rerank_top_k', 3))
+        best_a = self.reranker.rerank(
+            query, eng_a.search(query), top_k=kwargs.get("rerank_top_k", 3)
+        )
         # Process Policy B
-        best_b = self.reranker.rerank(query, eng_b.search(query), top_k=kwargs.get('rerank_top_k', 3))
-        
+        best_b = self.reranker.rerank(
+            query, eng_b.search(query), top_k=kwargs.get("rerank_top_k", 3)
+        )
+
         # Generate Comparative Decision
         return self.generator.generate_comparison(
-            query=query, 
-            docs_a=best_a, name_a=self._format_policy_name(collection_a),
-            docs_b=best_b, name_b=self._format_policy_name(collection_b),
-            history=active_history
+            query=query,
+            docs_a=best_a,
+            name_a=self._format_policy_name(collection_a),
+            docs_b=best_b,
+            name_b=self._format_policy_name(collection_b),
+            history=active_history,
         )

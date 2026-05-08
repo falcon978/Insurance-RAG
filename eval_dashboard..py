@@ -7,6 +7,7 @@ st.set_page_config(page_title="RAG Evaluation Dashboard", layout="wide")
 st.title("📊 RAG Evaluation Dashboard")
 st.markdown("Local analysis of retrieval and generation performance.")
 
+
 # Load data safely
 @st.cache_data
 def load_data():
@@ -15,6 +16,7 @@ def load_data():
             return json.load(f)
     except FileNotFoundError:
         return None
+
 
 results = load_data()
 
@@ -45,32 +47,36 @@ st.write("### Granular Query Analysis")
 
 for i, tc in enumerate(test_cases):
     is_pass = tc["success"]
-    
+
     # Apply filter
-    if status_filter == "Pass" and not is_pass: continue
-    if status_filter == "Fail" and is_pass: continue
-        
+    if status_filter == "Pass" and not is_pass:
+        continue
+    if status_filter == "Fail" and is_pass:
+        continue
+
     status_icon = "✅" if is_pass else "❌"
-    
+
     with st.expander(f"{status_icon} Query {i+1}: {tc['input'][:80]}..."):
         st.markdown("**User Query:**")
         st.info(tc["input"])
-        
+
         st.markdown("**RAG Actual Output:**")
         st.write(tc["actualOutput"])
-        
+
         st.markdown("**Metrics Breakdown:**")
-        
+
         # Build a table for the metrics
         metrics_data = []
         for metric in tc.get("metrics", []):
-            metrics_data.append({
-                "Metric Name": metric["name"],
-                "Score": round(metric["score"], 2),
-                "Threshold": metric["threshold"],
-                "Status": "✅ Pass" if metric["success"] else "❌ Fail",
-                "Judge's Reasoning": metric["reason"]
-            })
-            
+            metrics_data.append(
+                {
+                    "Metric Name": metric["name"],
+                    "Score": round(metric["score"], 2),
+                    "Threshold": metric["threshold"],
+                    "Status": "✅ Pass" if metric["success"] else "❌ Fail",
+                    "Judge's Reasoning": metric["reason"],
+                }
+            )
+
         metrics_df = pd.DataFrame(metrics_data)
         st.dataframe(metrics_df, use_container_width=True)

@@ -2,9 +2,9 @@
 insurance_metrics.py
 --------------------
 
-This module defines custom GEval metrics using DeepEval to evaluate the 
-Insurance RAG pipeline. It intentionally decouples 'Answer Correctness' 
-from 'Reasoning Faithfulness' to prevent false negatives caused by LLMs 
+This module defines custom GEval metrics using DeepEval to evaluate the
+Insurance RAG pipeline. It intentionally decouples 'Answer Correctness'
+from 'Reasoning Faithfulness' to prevent false negatives caused by LLMs
 phrasing correct answers differently than the expected golden datasets.
 """
 
@@ -16,17 +16,17 @@ from evaluations.utils.custom_judge import get_eval_judge
 def get_answer_correctness_metric() -> GEval:
     """
     Creates a GEval metric to evaluate the semantic correctness of the final answer.
-    
+
     This metric focuses exclusively on the "What" (the ultimate outcome/decision).
-    It is lenient regarding phrasing and structure, allowing the LLM to pass as long 
-    as its final conclusion (e.g., Covered, Not Covered, Conditional) aligns with 
+    It is lenient regarding phrasing and structure, allowing the LLM to pass as long
+    as its final conclusion (e.g., Covered, Not Covered, Conditional) aligns with
     the expected output. It explicitly ignores the reasoning steps.
 
     Returns:
         GEval: A configured DeepEval metric for Answer Correctness.
     """
     judge = get_eval_judge()
-    
+
     return GEval(
         name="Answer Correctness [GEval]",
         criteria="""
@@ -53,30 +53,30 @@ def get_answer_correctness_metric() -> GEval:
         """,
         evaluation_params=[
             LLMTestCaseParams.ACTUAL_OUTPUT,
-            LLMTestCaseParams.EXPECTED_OUTPUT
+            LLMTestCaseParams.EXPECTED_OUTPUT,
         ],
         model=judge,
         threshold=0.7,
-        # strict_mode=False allows for continuous scoring (0.0 to 1.0) instead of 
+        # strict_mode=False allows for continuous scoring (0.0 to 1.0) instead of
         # a binary 0 or 1, accommodating partial correctness or nuanced answers.
-        strict_mode=False 
+        strict_mode=False,
     )
 
 
 def get_reasoning_faithfulness_metric() -> GEval:
     """
     Creates a GEval metric to evaluate the logical grounding of the LLM's response.
-    
-    This metric focuses exclusively on the "Why" (the reasoning path). It acts as 
-    a strict insurance auditor, ensuring the LLM reached its conclusion using the 
-    correct policy clauses, constraints (e.g., waiting periods, specific exclusion 
+
+    This metric focuses exclusively on the "Why" (the reasoning path). It acts as
+    a strict insurance auditor, ensuring the LLM reached its conclusion using the
+    correct policy clauses, constraints (e.g., waiting periods, specific exclusion
     codes), and explicit text from the retrieved context.
 
     Returns:
         GEval: A configured DeepEval metric for Reasoning Faithfulness.
     """
     judge = get_eval_judge()
-    
+
     return GEval(
         name="Reasoning Faithfulness [GEval]",
         criteria="""
@@ -108,11 +108,11 @@ def get_reasoning_faithfulness_metric() -> GEval:
         evaluation_params=[
             LLMTestCaseParams.INPUT,
             LLMTestCaseParams.ACTUAL_OUTPUT,
-            LLMTestCaseParams.EXPECTED_OUTPUT
+            LLMTestCaseParams.EXPECTED_OUTPUT,
         ],
         model=judge,
         threshold=0.7,
-        # strict_mode=False is crucial here so the LLM can output the 0.5 score 
+        # strict_mode=False is crucial here so the LLM can output the 0.5 score
         # defined in the criteria for partially correct/vague reasoning.
-        strict_mode=False 
+        strict_mode=False,
     )

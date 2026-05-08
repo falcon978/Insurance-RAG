@@ -2,7 +2,7 @@
 app.py
 ------
 Streamlit Frontend Client for the Insurance RAG System.
-Features: 
+Features:
 - Conversational Chat with Sliding Window Memory.
 - Advanced RAG Tuning (Top-K Sliders).
 - Complete Admin Dashboard (Ingestion, Deletion, and Collection Management).
@@ -29,10 +29,11 @@ if "messages" not in st.session_state:
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
+
 # ---------------------------------------------------------------------------
 # API Communication Helpers
 # ---------------------------------------------------------------------------
-@st.cache_data(ttl=5) # Cache briefly to prevent redundant API calls
+@st.cache_data(ttl=5)  # Cache briefly to prevent redundant API calls
 def fetch_collections():
     """Fetches the list of available insurance policy collections from the API."""
     try:
@@ -43,6 +44,7 @@ def fetch_collections():
         st.error(f"Failed to connect to backend: {e}")
         return []
 
+
 available_policies = fetch_collections()
 
 # ---------------------------------------------------------------------------
@@ -51,9 +53,9 @@ available_policies = fetch_collections()
 with st.sidebar:
     st.header("🏥 RAG Configuration")
     mode = st.radio("Analysis Mode", ["Query Single Policy", "Compare Two Policies"])
-    
+
     st.divider()
-    
+
     st.markdown("### Selection")
     if mode == "Query Single Policy":
         selected_policy = st.selectbox("Select Policy", available_policies)
@@ -61,15 +63,33 @@ with st.sidebar:
         # Default to first two if available
         p1_idx = 0 if len(available_policies) > 0 else None
         p2_idx = 1 if len(available_policies) > 1 else 0
-        policy_a = st.selectbox("Policy A", available_policies, index=p1_idx, key="pol_a")
-        policy_b = st.selectbox("Policy B", available_policies, index=p2_idx, key="pol_b")
+        policy_a = st.selectbox(
+            "Policy A", available_policies, index=p1_idx, key="pol_a"
+        )
+        policy_b = st.selectbox(
+            "Policy B", available_policies, index=p2_idx, key="pol_b"
+        )
 
     st.divider()
 
     with st.expander("⚙️ Advanced RAG Tuning"):
-        st.info("Adjust these to balance between broader context and strict legal accuracy.")
-        ret_k = st.slider("Retrieval K (Broad Match Pool)", 5, 50, 15, help="Number of chunks pulled from the database initially.")
-        rerank_k = st.slider("Rerank K (LLM Context Window)", 1, 10, 3, help="Final number of top chunks sent to the LLM for adjudication.")
+        st.info(
+            "Adjust these to balance between broader context and strict legal accuracy."
+        )
+        ret_k = st.slider(
+            "Retrieval K (Broad Match Pool)",
+            5,
+            50,
+            15,
+            help="Number of chunks pulled from the database initially.",
+        )
+        rerank_k = st.slider(
+            "Rerank K (LLM Context Window)",
+            1,
+            10,
+            3,
+            help="Final number of top chunks sent to the LLM for adjudication.",
+        )
 
     st.divider()
     if st.button("🗑️ Clear Chat History", use_container_width=True):
@@ -103,42 +123,52 @@ with tab_chat:
                 try:
                     # IMPLEMENT SLIDING WINDOW: Only send the last 6 messages as history
                     # This ensures the LLM has immediate context without hitting token limits.
-                    history_payload = st.session_state.messages[-7:-1] if st.session_state.messages else []
-                    
+                    history_payload = (
+                        st.session_state.messages[-7:-1]
+                        if st.session_state.messages
+                        else []
+                    )
+
                     if mode == "Query Single Policy":
                         if not selected_policy:
                             st.error("Please select a policy from the sidebar first.")
                             st.stop()
-                        
+
                         payload = {
                             "query": query,
                             "collection_name": selected_policy,
                             "history": history_payload,
                             "retrieve_top_k": ret_k,
-                            "rerank_top_k": rerank_k
+                            "rerank_top_k": rerank_k,
                         }
-                        res = requests.post(f"{API_BASE_URL}/api/v1/query/single", json=payload)
+                        res = requests.post(
+                            f"{API_BASE_URL}/api/v1/query/single", json=payload
+                        )
                     else:
                         if policy_a == policy_b:
                             st.warning("Cannot compare a policy against itself.")
                             st.stop()
-                        
+
                         payload = {
                             "query": query,
                             "collection_a": policy_a,
                             "collection_b": policy_b,
                             "history": history_payload,
                             "retrieve_top_k": ret_k,
-                            "rerank_top_k": rerank_k
+                            "rerank_top_k": rerank_k,
                         }
-                        res = requests.post(f"{API_BASE_URL}/api/v1/query/compare", json=payload)
-                    
+                        res = requests.post(
+                            f"{API_BASE_URL}/api/v1/query/compare", json=payload
+                        )
+
                     res.raise_for_status()
                     answer = res.json()["data"]["markdown_report"]
-                    
+
                     # 3. Display Assistant Response and Save to State
                     st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": answer}
+                    )
 
                 except Exception as e:
                     st.error(f"Engine Error: {e}")
@@ -176,7 +206,9 @@ with tab_admin:
                 with col_d:
                     if st.button("Delete", key=f"del_{c_name}", type="primary"):
                         try:
-                            res = requests.delete(f"{API_BASE_URL}/api/v1/admin/collections/{c_name}")
+                            res = requests.delete(
+                                f"{API_BASE_URL}/api/v1/admin/collections/{c_name}"
+                            )
                             res.raise_for_status()
                             st.success(f"Deleted {c_name}")
                             fetch_collections.clear()
@@ -188,13 +220,19 @@ with tab_admin:
 
         # Section B: Ingestion Pipeline
         st.markdown("#### 📥 Add New Document")
-        doc_key = st.text_input("Collection Key (e.g., 'care_supreme_2024')").strip().lower()
-        ingest_method = st.radio("Source Type", ["File Upload", "Web URL"], horizontal=True)
+        doc_key = (
+            st.text_input("Collection Key (e.g., 'care_supreme_2024')").strip().lower()
+        )
+        ingest_method = st.radio(
+            "Source Type", ["File Upload", "Web URL"], horizontal=True
+        )
 
         if st.button("Process & Index Document", type="primary", disabled=not doc_key):
             # Enforce naming convention
-            target_col = doc_key if doc_key.startswith("insurance_") else f"insurance_{doc_key}"
-            
+            target_col = (
+                doc_key if doc_key.startswith("insurance_") else f"insurance_{doc_key}"
+            )
+
             with st.spinner("Extracting and indexing document..."):
                 try:
                     if ingest_method == "File Upload":
@@ -202,19 +240,31 @@ with tab_admin:
                         if not uploaded_file:
                             st.error("Please upload a file.")
                             st.stop()
-                        
-                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+
+                        files = {
+                            "file": (
+                                uploaded_file.name,
+                                uploaded_file.getvalue(),
+                                "application/pdf",
+                            )
+                        }
                         data = {"collection_name": target_col}
-                        res = requests.post(f"{API_BASE_URL}/api/v1/admin/ingest/file", files=files, data=data)
+                        res = requests.post(
+                            f"{API_BASE_URL}/api/v1/admin/ingest/file",
+                            files=files,
+                            data=data,
+                        )
                     else:
                         url_val = st.session_state.get("url_input")
                         if not url_val:
                             st.error("Please enter a URL.")
                             st.stop()
-                        
+
                         payload = {"url": url_val, "collection_name": target_col}
-                        res = requests.post(f"{API_BASE_URL}/api/v1/admin/ingest/url", json=payload)
-                    
+                        res = requests.post(
+                            f"{API_BASE_URL}/api/v1/admin/ingest/url", json=payload
+                        )
+
                     res.raise_for_status()
                     st.success("Indexing Complete!")
                     fetch_collections.clear()

@@ -18,7 +18,6 @@ import re
 from .models import TextBlock
 from .cleaner import clean_block_text
 
-
 # ---------------------------------------------------------------------------
 # Compiled regex patterns for insurance document structure
 # ---------------------------------------------------------------------------
@@ -45,6 +44,7 @@ _LIST_ITEM_PATTERN = re.compile(
 # SectionReconstructor
 # ---------------------------------------------------------------------------
 
+
 class SectionReconstructor:
     """
     Consumes a list of TextBlock objects and emits a list of section dicts.
@@ -68,7 +68,7 @@ class SectionReconstructor:
 
         # State tracking for hierarchy
         active_major_section = "PREAMBLE"
-        
+
         # Initialize with the default starting section
         current = _new_section(section=active_major_section)
 
@@ -90,19 +90,19 @@ class SectionReconstructor:
                 # Only update active_major_section if this is truly a major heading
                 if label["is_major"]:
                     active_major_section = label["section"]
-                
+
                 current = _new_section(
-                    section     = active_major_section,
-                    sub_section = "",
-                    heading     = text,
-                    page        = block.page_num,
+                    section=active_major_section,
+                    sub_section="",
+                    heading=text,
+                    page=block.page_num,
                 )
                 continue
 
             # ── 2. SUBHEADING (L2) ─────────────────────────────────────
             # Starts a new chunk but INHERITS the active_major_section
             if block.block_type == "subheading":
-                # Only flush if the current chunk has some content 
+                # Only flush if the current chunk has some content
                 # (Prevents empty sections when a Heading is followed by a Subheading)
                 if current["text"].strip() or current["heading"]:
                     sections.append(current)
@@ -111,10 +111,10 @@ class SectionReconstructor:
                 # If it's a subheading, 'section' in label usually contains the title
                 # We move that title to sub_section or heading to keep the Parent intact
                 current = _new_section(
-                    section     = active_major_section, 
-                    sub_section = label["sub_section"],
-                    heading     = text,
-                    page        = block.page_num,
+                    section=active_major_section,
+                    sub_section=label["sub_section"],
+                    heading=text,
+                    page=block.page_num,
                 )
                 continue
 
@@ -140,7 +140,8 @@ class SectionReconstructor:
         match a known structural pattern.
         """
 
-        if len(text) > 120: return False
+        if len(text) > 120:
+            return False
 
         for pattern in _SECTION_PATTERNS:
             if pattern.match(text):
@@ -159,6 +160,7 @@ class SectionReconstructor:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 def _new_section(
     section: str = "PREAMBLE",
     sub_section: str = "",
@@ -167,11 +169,11 @@ def _new_section(
 ) -> dict:
     """Create a fresh section accumulator dict."""
     return {
-        "section"    : section,
+        "section": section,
         "sub_section": sub_section,
-        "heading"    : heading,
-        "pages"      : {page},   # set — deduplicates page numbers automatically
-        "text"       : "",
+        "heading": heading,
+        "pages": {page},  # set — deduplicates page numbers automatically
+        "text": "",
     }
 
 
@@ -199,9 +201,9 @@ def _extract_section_label(text: str, block_type: str) -> dict:
 
     if block_type == "heading":
         return {
-            "section"   : normalised,
+            "section": normalised,
             "sub_section": "",
-            "is_major"  : True,
+            "is_major": True,
         }
 
     # 2. Clause pattern — e.g. "2.1.1. Accidental Bodily Injury"
@@ -216,7 +218,7 @@ def _extract_section_label(text: str, block_type: str) -> dict:
     # 3. No pattern matched — this is a bold phrase, not a structural heading
     #    Return is_major=False so active_major_section is preserved
     return {
-        "section"   : "",
+        "section": "",
         "sub_section": normalised,  # put the full text here since we have no better info
-        "is_major"  : False,
+        "is_major": False,
     }

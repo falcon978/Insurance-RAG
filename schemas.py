@@ -3,8 +3,10 @@ schemas.py
 ----------
 Pydantic schemas for FastAPI request and response validation.
 """
+
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict
+
 
 class SingleQueryRequest(BaseModel):
     query: str
@@ -14,6 +16,7 @@ class SingleQueryRequest(BaseModel):
     retrieve_top_k: int = 15
     rerank_top_k: int = 3
 
+
 class CompareQueryRequest(BaseModel):
     query: str
     collection_a: str
@@ -22,12 +25,15 @@ class CompareQueryRequest(BaseModel):
     retrieve_top_k: int = 15
     rerank_top_k: int = 3
 
+
 class UrlIngestRequest(BaseModel):
     url: HttpUrl
     collection_name: str
 
+
 class CollectionListResponse(BaseModel):
     collections: List[str]
+
 
 class StandardResponse(BaseModel):
     status: str
