@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import List
 
 
 # Base schema used by both Single and Comparison queries
@@ -28,4 +29,24 @@ class ComparisonResult(BaseModel):
     policy_b: PolicyDecision = Field(description="Independent evaluation for Policy B")
     comparison_verdict: ComparisonVerdict = Field(
         description="The final comparison verdict"
+    )
+
+
+class OptimizedSearchQuery(BaseModel):
+    """Structured query representation for advanced hybrid retrieval."""
+
+    canonical_query: str = Field(
+        description="The user's original intent rewritten clearly and concisely."
+    )
+    expanded_terms: List[str] = Field(
+        description="Formal insurance/legal synonyms and related concepts."
+    )
+    exclusion_terms: List[str] = Field(
+        description="Likely policy exclusions, waiting periods, or limits related to the query."
+    )
+    medical_terms: List[str] = Field(
+        description="Specific clinical terms, diagnoses, or treatments mentioned."
+    )
+    policy_sections: List[str] = Field(
+        description="Target policy sections (e.g., 'maternity', 'domiciliary', 'room rent')."
     )

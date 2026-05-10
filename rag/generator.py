@@ -16,7 +16,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from rag.utils import format_retrieved_context
 
 # Import the new unified templates
-from rag.prompts import (
+from rag.generation_prompts import (
     single_policy_unified_template,
     compare_policies_unified_template,
 )
