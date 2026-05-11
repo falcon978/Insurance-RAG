@@ -3,7 +3,7 @@ rag_wrapper.py
 --------------
 Wraps the core InsuranceRAGEngine to execute the pipeline step-by-step.
 Allows DeepEval to capture intermediate contexts and natively overrides
-the retrieval strategy (hybrid vs semantic).
+the retrieval strategy (hybrid vs semantic) via Reciprocal Rank Fusion weights.
 """
 
 import os
@@ -17,7 +17,6 @@ class EvalRAGWrapper:
 
     def _get_collection_name(self, source: str) -> str:
         """Safely maps the dataset source to your actual Chroma collections."""
-
         return f"insurance_{source}"
 
     def query(
@@ -28,78 +27,111 @@ class EvalRAGWrapper:
         rerank_top_k: int,
         strategy: str = "hybrid",
     ):
+        # --- STRATEGY OVERRIDE ---
+        # If the test requests pure 'semantic', we mathematically mute the Lexical (BM25)
+        # track by setting its RRF fusion weight to 0.0.
+        s_weight = 1.0 if strategy == "semantic" else settings.default_semantic_weight
+        l_weight = 0.0 if strategy == "semantic" else settings.default_lexical_weight
 
-        # --- Handle Comparison Queries ---
+        # 1. Translate Query (Common for both Single and Comparison routes)
+        structured_query = self.engine.rewriter_chain.invoke({"query": query})
+
+        bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
+        vector_string = (
+            f"{structured_query.canonical_query} "
+            f"{' '.join(structured_query.expanded_terms)} "
+            f"{' '.join(structured_query.exclusion_terms)} "
+            f"{' '.join(structured_query.policy_sections)}"
+        ).strip()
+
+        combined_rerank_string = f"{bm25_string} {vector_string}"
+
+        # ==========================================================
+        # COMPARISON POLICIES
+        # ==========================================================
         if source == "both":
             col_a = self._get_collection_name("care_supreme")
             col_b = self._get_collection_name("optima_secure")
 
-            # Fetch from both
-            eng_a = self.engine._get_search_engine(col_a, retrieve_top_k)
-            eng_b = self.engine._get_search_engine(col_b, retrieve_top_k)
+            # Retrieve Both (Using weighted dual-track)
+            fused_a = self.engine._dual_track_retrieve(
+                query,
+                bm25_string,
+                vector_string,
+                col_a,
+                retrieve_top_k,
+                s_weight,
+                l_weight,
+            )
+            fused_b = self.engine._dual_track_retrieve(
+                query,
+                bm25_string,
+                vector_string,
+                col_b,
+                retrieve_top_k,
+                s_weight,
+                l_weight,
+            )
 
-            # Apply strategy overrides to BOTH engines
-            if eng_a.strategy != strategy:
-                eng_a.strategy = strategy
-                eng_a.retriever = eng_a._initialize_strategy()
-            if eng_b.strategy != strategy:
-                eng_b.strategy = strategy
-                eng_b.retriever = eng_b._initialize_strategy()
-
-            # Fetch from both
-            nodes_a = eng_a.search(query)
-            nodes_b = eng_b.search(query)
-
-            # Rerank both
+            # Rerank Both
             if rerank_top_k > 0:
-                nodes_a = self.engine.reranker.rerank(
-                    query, nodes_a, top_k=rerank_top_k
+                best_a = self.engine.reranker.rerank(
+                    combined_rerank_string, fused_a, top_k=rerank_top_k
                 )
-                nodes_b = self.engine.reranker.rerank(
-                    query, nodes_b, top_k=rerank_top_k
+                best_b = self.engine.reranker.rerank(
+                    combined_rerank_string, fused_b, top_k=rerank_top_k
                 )
             else:
-                nodes_a = nodes_a[:retrieve_top_k]
-                nodes_b = nodes_b[:retrieve_top_k]
+                best_a = fused_a[:retrieve_top_k]
+                best_b = fused_b[:retrieve_top_k]
 
-            retrieved_contexts = [node.page_content for node in nodes_a + nodes_b]
-            actual_output = self.engine.compare_policies(
+            # Capture contexts for DeepEval
+            retrieved_contexts = [doc.page_content for doc in best_a + best_b]
+
+            # Pass DIRECTLY to generator so it uses the exact documents we captured
+            actual_output = self.engine.generator.generate_comparison(
                 query=query,
-                collection_a=col_a,
-                collection_b=col_b,
-                retrieve_top_k=retrieve_top_k,
-                rerank_top_k=rerank_top_k,
+                docs_a=best_a,
+                name_a=self.engine._format_policy_name(col_a),
+                docs_b=best_b,
+                name_b=self.engine._format_policy_name(col_b),
+                history=[],
             )
             return actual_output, retrieved_contexts
 
-        # --- Handle Single Policy Queries ---
+        # ==========================================================
+        # SINGLE POLICY
+        # ==========================================================
         collection_name = self._get_collection_name(source)
-        search_engine = self.engine._get_search_engine(collection_name, retrieve_top_k)
 
-        # Natively override the strategy if evaluating pure semantic search
-        if search_engine.strategy != strategy:
-            search_engine.strategy = strategy
-            search_engine.retriever = search_engine._initialize_strategy()
+        # Retrieve Single (Using weighted dual-track)
+        fused_docs = self.engine._dual_track_retrieve(
+            query,
+            bm25_string,
+            vector_string,
+            collection_name,
+            retrieve_top_k,
+            s_weight,
+            l_weight,
+        )
 
-        raw_nodes = search_engine.search(query)
-
-        # Reranking Phase
+        # Rerank
         if rerank_top_k > 0:
-            final_nodes = self.engine.reranker.rerank(
-                query, raw_nodes, top_k=rerank_top_k
+            best_docs = self.engine.reranker.rerank(
+                combined_rerank_string, fused_docs, top_k=rerank_top_k
             )
         else:
-            final_nodes = raw_nodes[:retrieve_top_k]
+            best_docs = fused_docs[:retrieve_top_k]
 
-        # Extract plain text STRICTLY for DeepEval metrics to read
-        retrieved_contexts = [node.page_content for node in final_nodes]
+        # Capture contexts for DeepEval
+        retrieved_contexts = [doc.page_content for doc in best_docs]
 
-        # Generation Phase
-        # Pass the actual Document objects to the generator (as expected by engine.py)
+        # Pass DIRECTLY to generator so it uses the exact documents we captured
         actual_output = self.engine.generator.generate_single_answer(
             query=query,
-            docs=final_nodes,
+            docs=best_docs,
             policy_name=self.engine._format_policy_name(collection_name),
+            history=[],
         )
 
         return actual_output, retrieved_contexts
