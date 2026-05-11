@@ -26,6 +26,7 @@ except ImportError:
     PineconeVectorStore = None
 
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
@@ -65,8 +66,14 @@ class InsuranceRAGEngine:
             model_name=settings.llm_model_name,
         )
 
+        planner_llm = ChatGoogleGenerativeAI(
+            model=settings.planner_model_name,
+            temperature=settings.planner_temperature,
+            api_key=gemini_api_key,
+        )
+
         # 2. Initialize the Structured Output Translation Layer
-        self.rewriter_chain = get_structured_rewriter_chain(self.generator.llm)
+        self.rewriter_chain = get_structured_rewriter_chain(planner_llm)
 
         # 3. Initialize Local Caching
         self._bm25_cache = {}
