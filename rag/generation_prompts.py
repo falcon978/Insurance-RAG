@@ -1,6 +1,6 @@
 """
-rag/prompts.py
---------------
+rag/generation_prompts.py
+-------------------------
 Unified prompt architecture for Insurance RAG systems.
 
 Architecture Goals
@@ -14,15 +14,10 @@ Architecture Goals
 7. Controlled risk disclosure
 8. Minimal ambiguity follow-ups
 9. Shared compliance primitives without cognitive over-sharing
-
-IMPORTANT:
-- All JSON examples use double curly braces {{ }} because LangChain
-  treats single braces as template variables.
-- The adjudication JSON is ALWAYS the authoritative artifact.
-- Advisory output is explanatory only.
 """
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage
 
 # ===========================================================================
 # SHARED BASE RULES
@@ -143,7 +138,6 @@ Each question MUST directly map
 to a documented evidence gap.
 """
 
-
 # ===========================================================================
 # SHARED OUTPUT RULES
 # ===========================================================================
@@ -177,11 +171,8 @@ Forbidden outputs include:
 Output RAW JSON only inside the required delimiters.
 """
 
-
 # ===========================================================================
-
 # SHARED ADVISORY SAFETY RULES
-
 # ===========================================================================
 
 BASE_ADVISORY_RULES = """
@@ -246,7 +237,6 @@ The disclaimer MUST match EXACTLY:
 
 Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review.
 """
-
 
 # ===========================================================================
 # SINGLE POLICY — TASK-SPECIFIC DECISION LOGIC
@@ -367,7 +357,6 @@ LOW:
 
 # ===========================================================================
 # SINGLE POLICY — TASK-SPECIFIC ADVISORY LOGIC
-
 # ===========================================================================
 
 SINGLE_POLICY_ADVISORY_LOGIC = """
@@ -426,7 +415,6 @@ Questions MUST:
 Otherwise:
 - omit the section entirely.
 """
-
 
 # ===========================================================================
 # COMPARE POLICY — TASK-SPECIFIC DECISION LOGIC
@@ -535,10 +523,8 @@ Confidence must be evaluated independently for each policy.
 Do NOT synchronize confidence scores artificially.
 """
 
-
 # ===========================================================================
 # COMPARE POLICY — TASK-SPECIFIC ADVISORY LOGIC
-
 # ===========================================================================
 
 COMPARE_POLICY_ADVISORY_LOGIC = """
@@ -621,77 +607,72 @@ Questions MUST:
 - directly map to documented ambiguity.
 """
 
-
 # ===========================================================================
 # SINGLE POLICY — UNIFIED TEMPLATE
 # ===========================================================================
 
-single_policy_unified_template = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            f"""
-  {BASE_COMPLIANCE_RULES}
+# Assemble the static system string first using string concatenation
+single_policy_system_text = (
+    BASE_COMPLIANCE_RULES
+    + "\n\n"
+    + BASE_OUTPUT_RULES
+    + "\n\n"
+    + BASE_ADVISORY_RULES
+    + "\n\n"
+    + SINGLE_POLICY_DECISION_LOGIC
+    + "\n\n"
+    + """
+====================================================
+PHASE 1 — AUTHORITATIVE ADJUDICATION OUTPUT
+====================================================
 
-  {BASE_OUTPUT_RULES}
+Output ONLY inside:
 
-  {BASE_ADVISORY_RULES}
-
-  {SINGLE_POLICY_DECISION_LOGIC}
-
-  ====================================================
-  PHASE 1 — AUTHORITATIVE ADJUDICATION OUTPUT
-  ====================================================
-
-  Output ONLY inside:
-
-  <<<BEGIN_ADJUDICATION_JSON>>>
-  {{
+<<<BEGIN_ADJUDICATION_JSON>>>
+{
   "coverage_status": "YES | NO | CONDITIONAL",
-
   "primary_clause": "string or null",
-
-  "specific_exception_found": {{
+  "specific_exception_found": {
     "exists": true,
     "clause": "string or null"
-  }},
-
+  },
   "gap_analysis": "string or null",
-
   "decision_confidence": "HIGH | MEDIUM | LOW",
-
   "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-  }}
-  <<<END_ADJUDICATION_JSON>>>
+}
+<<<END_ADJUDICATION_JSON>>>
+"""
+    + "\n\n"
+    + SINGLE_POLICY_ADVISORY_LOGIC
+    + "\n\n"
+    + """
+====================================================
+PHASE 2 — NON-AUTHORITATIVE ADVISORY OUTPUT
+====================================================
 
-  {SINGLE_POLICY_ADVISORY_LOGIC}
+Output ONLY inside:
 
-  ====================================================
-  PHASE 2 — NON-AUTHORITATIVE ADVISORY OUTPUT
-  ====================================================
-
-  Output ONLY inside:
-
-  <<<BEGIN_ADVISORY_REPORT>>>
-  {{
+<<<BEGIN_ADVISORY_REPORT>>>
+{
   "executive_summary": "markdown string",
-
   "deep_dive": "markdown string",
-
   "risk_disclosure": "markdown string",
-
   "follow_up_questions": [
-  "question 1",
-  "question 2"
+    "question 1",
+    "question 2"
   ],
-
   "mandatory_disclaimer": "Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review."
-  }}
-  <<<END_ADVISORY_REPORT>>>
-  """,
-        ),
+}
+<<<END_ADVISORY_REPORT>>>
+"""
+)
+
+single_policy_unified_template = ChatPromptTemplate.from_messages(
+    [
+        # Using SystemMessage explicitly bypasses LangChain's template parser!
+        SystemMessage(content=single_policy_system_text),
         ("placeholder", "{history}"),
-        ("user", "Context:\n" "{context}\n\n" "USER QUERY:\n" "{query}"),
+        ("user", "Context:\n{context}\n\nUSER QUERY:\n{query}"),
     ]
 )
 
@@ -699,71 +680,57 @@ single_policy_unified_template = ChatPromptTemplate.from_messages(
 # COMPARE POLICY — UNIFIED TEMPLATE
 # ===========================================================================
 
-compare_policies_unified_template = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            f"""
-{BASE_COMPLIANCE_RULES}
-
-{BASE_OUTPUT_RULES}
-
-{BASE_ADVISORY_RULES}
-
-{COMPARE_POLICY_DECISION_LOGIC}
-
+compare_policies_system_text = (
+    BASE_COMPLIANCE_RULES
+    + "\n\n"
+    + BASE_OUTPUT_RULES
+    + "\n\n"
+    + BASE_ADVISORY_RULES
+    + "\n\n"
+    + COMPARE_POLICY_DECISION_LOGIC
+    + "\n\n"
+    + """
 ====================================================
 PHASE 1 — AUTHORITATIVE COMPARATIVE ADJUDICATION
-================================================
+====================================================
 
 Output ONLY inside:
 
 <<<BEGIN_ADJUDICATION_JSON>>>
-{{
-  "policy_a": {{
+{
+  "policy_a": {
     "coverage_status": "YES | NO | CONDITIONAL",
-
     "primary_clause": "string or null",
-
-    "specific_exception_found": {{
+    "specific_exception_found": {
       "exists": true,
       "clause": "string or null"
-    }},
-
+    },
     "gap_analysis": "string or null",
-
     "decision_confidence": "HIGH | MEDIUM | LOW",
-
     "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-  }},
-
-  "policy_b": {{
+  },
+  "policy_b": {
     "coverage_status": "YES | NO | CONDITIONAL",
-
     "primary_clause": "string or null",
-
-    "specific_exception_found": {{
+    "specific_exception_found": {
       "exists": true,
       "clause": "string or null"
-    }},
-
+    },
     "gap_analysis": "string or null",
-
     "decision_confidence": "HIGH | MEDIUM | LOW",
-
     "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-  }},
-
-  "comparison_verdict": {{
+  },
+  "comparison_verdict": {
     "mathematical_winner": "POLICY_A | POLICY_B | TIE | CANNOT_DETERMINE",
-
     "winning_reason": "string or null"
-  }}
-}}
+  }
+}
 <<<END_ADJUDICATION_JSON>>>
-
-{COMPARE_POLICY_ADVISORY_LOGIC}
-
+"""
+    + "\n\n"
+    + COMPARE_POLICY_ADVISORY_LOGIC
+    + "\n\n"
+    + """
 ====================================================
 PHASE 2 — NON-AUTHORITATIVE COMPARATIVE ADVISORY
 ====================================================
@@ -771,34 +738,28 @@ PHASE 2 — NON-AUTHORITATIVE COMPARATIVE ADVISORY
 Output ONLY inside:
 
 <<<BEGIN_ADVISORY_REPORT>>>
-{{
-"executive_summary": "markdown string",
-
-"comparison_table": "markdown table string",
-
-"deep_dive": "markdown string",
-
-"risk_disclosure": "markdown string",
-
-"follow_up_questions": [
-"question 1",
-"question 2"
-],
-
-"mandatory_disclaimer": "Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review."
-}}
+{
+  "executive_summary": "markdown string",
+  "comparison_table": "markdown table string",
+  "deep_dive": "markdown string",
+  "risk_disclosure": "markdown string",
+  "follow_up_questions": [
+    "question 1",
+    "question 2"
+  ],
+  "mandatory_disclaimer": "Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review."
+}
 <<<END_ADVISORY_REPORT>>>
-""",
-        ),
+"""
+)
+
+compare_policies_unified_template = ChatPromptTemplate.from_messages(
+    [
+        SystemMessage(content=compare_policies_system_text),
         ("placeholder", "{history}"),
         (
             "user",
-            "Policy A Context:\n"
-            "{context_a}\n\n"
-            "Policy B Context:\n"
-            "{context_b}\n\n"
-            "USER QUERY:\n"
-            "{query}",
+            "Policy A Context:\n{context_a}\n\nPolicy B Context:\n{context_b}\n\nUSER QUERY:\n{query}",
         ),
     ]
 )

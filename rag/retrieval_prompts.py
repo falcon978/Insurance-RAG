@@ -6,12 +6,12 @@ Contains system instructions for query translation, routing, and intent extracti
 """
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 # ===========================================================================
 # QUERY TRANSLATION PROMPTS
 # ===========================================================================
 
-# We define the system instructions separately to keep the template clean
 SYSTEM_INSTRUCTIONS = """You are an insurance policy retrieval query planner.
 
 Convert the user's insurance question into a structured retrieval payload
@@ -51,41 +51,29 @@ STRICT RULES:
 
 STRUCTURED_TRANSLATOR_PROMPT = ChatPromptTemplate.from_messages(
     [
-        ("system", SYSTEM_INSTRUCTIONS),
+        # Static Message: Bypasses template parsing
+        SystemMessage(content=SYSTEM_INSTRUCTIONS),
         # --- FEW SHOT EXAMPLE 1: Colloquial & Medical ---
-        ("human", "my kid swallowed a lego piece, will ER be covered?"),
-        (
-            "assistant",
-            '{"canonical_query": "emergency room coverage for pediatric foreign object ingestion", '
-            '"expanded_terms": ["accidental injury", "pediatric emergency admission", "emergency hospitalization", "foreign body ingestion"], '
-            '"exclusion_terms": ["gross negligence", "self-inflicted injury", "non-medical admission", "consumables exclusion", "OPD treatment"], '
-            '"medical_terms": ["foreign object ingestion", "pediatric", "choking"], '
-            '"policy_sections": ["emergency care", "inpatient hospitalization", "accidental injury", "exclusions"]}',
+        HumanMessage(content="my kid swallowed a lego piece, will ER be covered?"),
+        AIMessage(
+            content='{"canonical_query": "emergency room coverage for pediatric foreign object ingestion", "expanded_terms": ["accidental injury", "pediatric emergency admission", "emergency hospitalization", "foreign body ingestion"], "exclusion_terms": ["gross negligence", "self-inflicted injury", "non-medical admission", "consumables exclusion", "OPD treatment"], "medical_terms": ["foreign object ingestion", "pediatric", "choking"], "policy_sections": ["emergency care", "inpatient hospitalization", "accidental injury", "exclusions"]}'
         ),
         # --- FEW SHOT EXAMPLE 2: Vague & Geographical ---
-        ("human", "can I use this if I get sick while traveling outside India?"),
-        (
-            "assistant",
-            '{"canonical_query": "coverage for medical treatment outside territorial limits of India", '
-            '"expanded_terms": ["global coverage", "international emergency hospitalization", "worldwide cover", "overseas treatment", "foreign jurisdiction"], '
-            '"exclusion_terms": ["planned treatment abroad", "medical tourism", "travel against medical advice", "territorial limits strictly within India", "non-emergency overseas care"], '
-            '"medical_terms": ["illness", "sickness", "emergency medical condition"], '
-            '"policy_sections": ["territorial limits", "global cover rider", "emergency care abroad", "geographical scope"]}',
+        HumanMessage(
+            content="can I use this if I get sick while traveling outside India?"
+        ),
+        AIMessage(
+            content='{"canonical_query": "coverage for medical treatment outside territorial limits of India", "expanded_terms": ["global coverage", "international emergency hospitalization", "worldwide cover", "overseas treatment", "foreign jurisdiction"], "exclusion_terms": ["planned treatment abroad", "medical tourism", "travel against medical advice", "territorial limits strictly within India", "non-emergency overseas care"], "medical_terms": ["illness", "sickness", "emergency medical condition"], "policy_sections": ["territorial limits", "global cover rider", "emergency care abroad", "geographical scope"]}'
         ),
         # --- FEW SHOT EXAMPLE 3: Pre-existing Condition & Claim Rejection ---
-        (
-            "human",
-            "my diabetes treatment was rejected because they said it existed before policy start",
+        HumanMessage(
+            content="my diabetes treatment was rejected because they said it existed before policy start"
         ),
-        (
-            "assistant",
-            '{"canonical_query": "pre-existing diabetes treatment claim rejection", '
-            '"expanded_terms": ["pre-existing disease", "PED exclusion", "chronic illness", "waiting period", "disclosure obligation"], '
-            '"exclusion_terms": ["pre-existing condition waiting period", "non-disclosure", "moratorium period", "continuous coverage requirement"], '
-            '"medical_terms": ["diabetes mellitus", "chronic disease"], '
-            '"policy_sections": ["pre-existing diseases", "waiting period", "general exclusions", "claims conditions"]}',
+        AIMessage(
+            content='{"canonical_query": "pre-existing diabetes treatment claim rejection", "expanded_terms": ["pre-existing disease", "PED exclusion", "chronic illness", "waiting period", "disclosure obligation"], "exclusion_terms": ["pre-existing condition waiting period", "non-disclosure", "moratorium period", "continuous coverage requirement"], "medical_terms": ["diabetes mellitus", "chronic disease"], "policy_sections": ["pre-existing diseases", "waiting period", "general exclusions", "claims conditions"]}'
         ),
         # --- ACTUAL USER INPUT ---
+        # Notice we leave this as a tuple! This tells LangChain "Please parse {query} here"
         ("human", "{query}"),
     ]
 )
