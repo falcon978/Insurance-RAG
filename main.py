@@ -179,23 +179,3 @@ async def ingest_url(req: UrlIngestRequest):
         # 4. Ensure cleanup occurs regardless of pipeline success/failure
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
-
-
-@app.post("/api/v1/admin/ingest/url")
-async def ingest_url(req: UrlIngestRequest):
-    tmp_path = ""
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            headers = {"User-Agent": "Mozilla/5.0"}
-            r = urllib.request.urlopen(
-                urllib.request.Request(str(req.url), headers=headers)
-            )
-            tmp.write(r.read())
-            tmp_path = tmp.name
-        await ExtractionPipeline(
-            pdf_path=tmp_path, collection_name=req.collection_name
-        ).a_run()
-        return StandardResponse(status="success", message="URL indexed")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)

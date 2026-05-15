@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 
 
 class PolicyVectorStore:
+
+    # Class-level attribute to ensure a globally shared lock across all instances.
+    _bm25_io_lock = None
+
     def __init__(self, collection_name: str, device: str = "cpu"):
         """
         Initializes the embedding model and connects to the configured Vector DB.
@@ -46,6 +50,10 @@ class PolicyVectorStore:
             collection_name: The name of the collection (Chroma) or Namespace (Pinecone).
             device: 'cpu' or 'cuda' for embedding generation.
         """
+        # Lazy instantiation ensures the lock is safely bound to the active asyncio event loop.
+        if PolicyVectorStore._bm25_io_lock is None:
+            PolicyVectorStore._bm25_io_lock = asyncio.Lock()
+
         self.collection_name = collection_name
 
         # 1. Initialize Shared Embedding Model Dynamically
