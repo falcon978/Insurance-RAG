@@ -1,18 +1,20 @@
 """
 rag/retriever.py
 ----------------
-Executes Hybrid Search by orchestrating Vector and Lexical retrievers.
-This version is decoupled from the Vector DB's internal storage and
-relies on a pre-initialized BM25 retriever for high-speed lexical search.
+Executes Asymmetric Ensemble Retrieval.
+Orchestrates parallel multi-string searches across Vector and Lexical databases
+and merges them using Two-Stage Reciprocal Rank Fusion.
 """
 
 import logging
-import hashlib
+import concurrent.futures
 from typing import List, Optional
 from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_core.runnables import RunnableParallel, RunnableLambda
+
+# Import fusion utilities for merging results
+from rag.utils import fuse_multi_query_results, fuse_weighted_results
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +24,9 @@ class DocumentSearch:
         self,
         vector_store: VectorStore,
         bm25_retriever: Optional[BM25Retriever] = None,
-        strategy: str = "hybrid",
         top_k: int = 15,
+        semantic_weight: float = 0.5,
+        lexical_weight: float = 0.5,
     ):
         """
         Initializes the search engine with a provider-agnostic vector store
@@ -32,85 +35,71 @@ class DocumentSearch:
         Args:
             vector_store: Any LangChain VectorStore (Chroma, Pinecone, etc.).
             bm25_retriever: A pre-built BM25 retriever cached by the Engine.
-            strategy: 'hybrid' or 'semantic'.
-            top_k: Number of documents to retrieve in the broad pool.
+            top_k: Number of documents to retrieve per retrieval branch.
+            semantic_weight: Weight given to semantic (vector) results during final fusion.
+            lexical_weight: Weight given to lexical (BM25) results during final fusion.
         """
         self.vector_store = vector_store
         self.bm25_retriever = bm25_retriever
-        self.strategy = strategy.lower()
         self.top_k = top_k
-        self.retriever = self._initialize_strategy()
+        self.semantic_weight = semantic_weight
+        self.lexical_weight = lexical_weight
 
-    def _build_semantic_retriever(self):
-        """Standard vector-based retrieval."""
-        return self.vector_store.as_retriever(search_kwargs={"k": self.top_k})
+        # Pre-build the underlying LangChain retrievers
+        self.vector_retriever = self.vector_store.as_retriever(
+            search_kwargs={"k": self.top_k}
+        )
+        if self.bm25_retriever:
+            self.bm25_retriever.k = self.top_k
 
-    def _build_hybrid_retriever(self):
+    def search(
+        self, original_query: str, bm25_string: str, vector_string: str
+    ) -> List[Document]:
         """
-        Combines Semantic and Lexical results using Reciprocal Rank Fusion (RRF).
-        If no BM25 retriever is available, it gracefully falls back to Semantic.
-        """
-        semantic_retriever = self._build_semantic_retriever()
+        Executes the Asymmetric Ensemble Retrieval Pipeline.
 
-        if not self.bm25_retriever:
-            logger.warning(
-                "Hybrid search requested but BM25 index is missing. Falling back to Semantic."
+        Process:
+        1. Runs 3 parallel searches (BM25 Lexical, Vector Original, Vector Dense).
+        2. Applies Two-Stage Reciprocal Rank Fusion (Lexical/Semantic Split).
+
+        Args:
+            original_query (str): The original user query.
+            bm25_string (str): The string optimized for sparse lexical retrieval.
+            vector_string (str): The string optimized for dense semantic retrieval.
+
+        Returns:
+            List[Document]: The fused and ranked document list.
+        """
+        # Parallel Database Execution to minimize sequential latency
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Path A: Vector search on the original query (Semantic Anchor)
+            future_vec_orig = executor.submit(
+                self.vector_retriever.invoke, original_query
             )
-            return semantic_retriever
 
-        # Synchronize top_k for both retrieval branches
-        self.bm25_retriever.k = self.top_k
+            # Path B: Vector search on the dense semantic string (Bridging Vocabulary)
+            future_vec_legal = executor.submit(
+                self.vector_retriever.invoke, vector_string
+            )
 
-        # 1. Run retrievers in parallel
-        parallel_retrieval = RunnableParallel(
-            semantic=semantic_retriever, bm25=self.bm25_retriever
+            # Path C: BM25 search on the lexical string (Original intent + Clinical Terms)
+            if self.bm25_retriever:
+                future_bm25 = executor.submit(self.bm25_retriever.invoke, bm25_string)
+
+            docs_vec_orig = future_vec_orig.result()
+            docs_vec_legal = future_vec_legal.result()
+            docs_bm25 = future_bm25.result() if self.bm25_retriever else []
+
+        # Two-Stage Reciprocal Rank Fusion
+        # Stage 1: Standard unweighted fusion of the two Semantic tracks
+        semantic_fused = fuse_multi_query_results([docs_vec_orig, docs_vec_legal])
+
+        # Stage 2: Weighted fusion of Semantic vs. Lexical tracks
+        final_fused = fuse_weighted_results(
+            list_a=semantic_fused,
+            list_b=docs_bm25,
+            weight_a=self.semantic_weight,
+            weight_b=self.lexical_weight,
         )
 
-        # 2. Custom Reciprocal Rank Fusion (RRF) Logic
-        def reciprocal_rank_fusion(results: dict) -> List[Document]:
-            """
-            Deduplicates and re-scores documents using RRF from both retrieval streams.
-            """
-            fused_scores = {}
-            # Weights favor semantic meaning slightly over exact keyword matches
-            weights = {"semantic": 0.7, "bm25": 0.3}
-            k_constant = 60  # Standard RRF smoothing constant
-
-            for strategy_name, docs in results.items():
-                weight = weights[strategy_name]
-                for rank, doc in enumerate(docs, start=1):
-
-                    # Use page_content as a unique ID to deduplicate chunks
-                    doc_id = hashlib.md5(doc.page_content.encode("utf-8")).hexdigest()
-
-                    if doc_id not in fused_scores:
-                        fused_scores[doc_id] = {"doc": doc, "score": 0.0}
-
-                    # RRF Formula: weight * (1 / (k + rank))
-                    fused_scores[doc_id]["score"] += weight * (
-                        1.0 / (k_constant + rank)
-                    )
-
-            # Sort by fused score descending
-            reranked_docs = sorted(
-                fused_scores.values(), key=lambda x: x["score"], reverse=True
-            )
-
-            # Return top_k unique documents
-            return [item["doc"] for item in reranked_docs[: self.top_k]]
-
-        # Pipe the components using LCEL
-        return parallel_retrieval | RunnableLambda(reciprocal_rank_fusion)
-
-    def _initialize_strategy(self):
-        """Selects the retrieval chain based on the chosen strategy."""
-        if self.strategy == "semantic":
-            return self._build_semantic_retriever()
-        elif self.strategy == "bm25" and self.bm25_retriever:
-            return self.bm25_retriever()
-        else:
-            return self._build_hybrid_retriever()
-
-    def search(self, query: str) -> List[Document]:
-        """Invokes the retrieval pipeline."""
-        return self.retriever.invoke(query)
+        return final_fused

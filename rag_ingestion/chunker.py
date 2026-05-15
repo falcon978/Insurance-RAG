@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class MarkdownHierarchicalChunker:
-    def __init__(self, chunk_size: int = 1200, chunk_overlap: int = 150):
+    def __init__(self, chunk_size: int = 2200, chunk_overlap: int = 400):
         # 1. Define the Markdown hierarchy to track
         self.headers_to_split_on = [
             ("#", "major_section"),  # L1 (e.g., PART III - EXCLUSIONS)

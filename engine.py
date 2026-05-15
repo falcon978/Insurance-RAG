@@ -6,16 +6,13 @@ The central orchestrator for the Insurance RAG pipeline.
 Responsibilities:
 1. Manages provider-agnostic Vector DB connections (Chroma or Pinecone).
 2. Maintains efficient BM25 index caching.
-3. Implements Asymmetric Ensemble Retrieval (Orthogonal Hybrid Search).
-4. Executes Two-Stage Reciprocal Rank Fusion (RRF) for lexical/semantic balancing.
-5. Manages Cross-Encoder reranking using concatenated contextual strings.
-6. Handles unified single-pass adjudication and conversational state memory.
+3. Manages Cross-Encoder reranking using concatenated contextual strings.
+4. Handles unified single-pass adjudication and conversational state memory.
 """
 
 import os
 import pickle
 import logging
-import concurrent.futures
 from typing import List, Optional
 
 from langchain_chroma import Chroma
@@ -36,7 +33,6 @@ from rag.retriever import DocumentSearch
 from rag.rerankers import ContextReranker
 from rag.generator import ResponseGenerator
 from rag.query_rewriter import get_structured_rewriter_chain
-from rag.utils import fuse_multi_query_results, fuse_weighted_results
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +97,11 @@ class InsuranceRAGEngine:
             return None
 
     def _get_search_engine(
-        self, collection_name: str, retrieve_top_k: int
+        self,
+        collection_name: str,
+        retrieve_top_k: int,
+        semantic_weight: float = 0.5,
+        lexical_weight: float = 0.5,
     ) -> DocumentSearch:
         """Connects to Chroma or Pinecone and attaches the BM25 local index."""
         if settings.vector_db_type == "pinecone":
@@ -125,85 +125,14 @@ class InsuranceRAGEngine:
         return DocumentSearch(
             vector_store=vector_store,
             bm25_retriever=bm25_retriever,
-            strategy="hybrid",
             top_k=retrieve_top_k,
+            semantic_weight=semantic_weight,
+            lexical_weight=lexical_weight,
         )
 
     def _format_policy_name(self, collection_name: str) -> str:
         """Cleans and formats raw collection names for UI presentation."""
         return collection_name.replace("insurance_", "").replace("_", " ").title()
-
-    def _dual_track_retrieve(
-        self,
-        query: str,
-        bm25_search_string: str,
-        vector_search_string: str,
-        collection_name: str,
-        top_k: int,
-        semantic_weight: float = 0.5,
-        lexical_weight: float = 0.5,
-    ) -> List[Document]:
-        """
-        Executes the Asymmetric Ensemble Retrieval Pipeline.
-        Accepts pre-formatted search strings to ensure deterministic execution
-        and decouple string processing from core retrieval logic.
-
-        Process:
-        1. Runs 3 parallel searches (BM25 Lexical, Vector Original, Vector Dense).
-        2. Applies Two-Stage Reciprocal Rank Fusion (Lexical/Semantic Split).
-
-        Args:
-            query (str): The original user query.
-            bm25_search_string (str): The string optimized for sparse lexical retrieval.
-            vector_search_string (str): The string optimized for dense semantic retrieval.
-            collection_name (str): The target vector DB collection/namespace.
-            top_k (int): Number of documents to retrieve per search path.
-            semantic_weight (float): The weight assigned to the semantic tracks in the final fusion.
-            lexical_weight (float): The weight assigned to the lexical tracks in the final fusion.
-
-        Returns:
-            List[Document]: The fused and ranked document list.
-        """
-        search_engine = self._get_search_engine(collection_name, top_k)
-        vector_retriever = search_engine.vector_store.as_retriever(
-            search_kwargs={"k": top_k}
-        )
-        bm25_retriever = search_engine.bm25_retriever
-
-        logger.info(f"[Retrieval Target] {collection_name}")
-        logger.info(f"[BM25 Query] '{bm25_search_string}'")
-        logger.info(f"[Vector Query] '{vector_search_string}'")
-
-        # Parallel Database Execution to minimize sequential latency
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Path A: Vector search on the original query (Semantic Anchor)
-            future_vec_orig = executor.submit(vector_retriever.invoke, query)
-            # Path B: Vector search on the dense semantic string (Bridging Vocabulary)
-            future_vec_legal = executor.submit(
-                vector_retriever.invoke, vector_search_string
-            )
-
-            # Path C: BM25 search on the lexical string (Original intent + Clinical Terms)
-            if bm25_retriever:
-                future_bm25 = executor.submit(bm25_retriever.invoke, bm25_search_string)
-
-            docs_vec_orig = future_vec_orig.result()
-            docs_vec_legal = future_vec_legal.result()
-            docs_bm25 = future_bm25.result() if bm25_retriever else []
-
-        # Two-Stage Reciprocal Rank Fusion
-        # Stage 1: Standard unweighted fusion of the two Semantic tracks
-        semantic_fused = fuse_multi_query_results([docs_vec_orig, docs_vec_legal])
-
-        # Stage 2: Weighted fusion of Semantic vs. Lexical tracks
-        final_fused = fuse_weighted_results(
-            list_a=semantic_fused,
-            list_b=docs_bm25,
-            weight_a=semantic_weight,
-            weight_b=lexical_weight,
-        )
-
-        return final_fused
 
     def query_single_policy(
         self,
@@ -217,6 +146,10 @@ class InsuranceRAGEngine:
         Runs the complete advanced retrieval and generation pipeline for a single policy.
         """
         active_history = history[-max_history_len:] if history else []
+        ret_k = kwargs.get("retrieve_top_k", 15)
+        rerank_k = kwargs.get("rerank_top_k", 5)
+        s_weight = kwargs.get("semantic_weight", 0.5)
+        l_weight = kwargs.get("lexical_weight", 0.5)
 
         # 1. Generate Structured Intent
         structured_query = self.rewriter_chain.invoke({"query": query})
@@ -230,22 +163,23 @@ class InsuranceRAGEngine:
             f"{' '.join(structured_query.policy_sections)}"
         ).strip()
 
-        # 3. Dual-Track Retrieval
-        fused_docs = self._dual_track_retrieve(
-            query,
-            bm25_string,
-            vector_string,
-            collection_name,
-            kwargs.get("retrieve_top_k", 15),
-            semantic_weight=kwargs.get("semantic_weight", 0.5),
-            lexical_weight=kwargs.get("lexical_weight", 0.5),
+        logger.info(f"[Retrieval Target] {collection_name}")
+        logger.info(f"[BM25 Query] '{bm25_string}'")
+        logger.info(f"[Vector Query] '{vector_string}'")
+
+        # 3. Retrieve via Asymmetric Ensemble
+        search_engine = self._get_search_engine(
+            collection_name, ret_k, s_weight, l_weight
+        )
+        fused_docs = search_engine.search(
+            original_query=query, bm25_string=bm25_string, vector_string=vector_string
         )
 
         # 4. Cross-Encoder Reranking
         # Concatenates the lexical and semantic strings to provide comprehensive context to the Cross-Encoder.
         combined_rerank_string = f"{bm25_string} {vector_string}"
         best_docs = self.reranker.rerank(
-            combined_rerank_string, fused_docs, top_k=kwargs.get("rerank_top_k", 5)
+            combined_rerank_string, fused_docs, top_k=rerank_k
         )
 
         # 5. Unified Single-Pass Generation
@@ -273,6 +207,8 @@ class InsuranceRAGEngine:
         active_history = history[-max_history_len:] if history else []
         ret_k = kwargs.get("retrieve_top_k", 15)
         rerank_k = kwargs.get("rerank_top_k", 5)
+        s_weight = kwargs.get("semantic_weight", 0.5)
+        l_weight = kwargs.get("lexical_weight", 0.5)
 
         # 1. Generate Structured Intent (Executes once for consistency across both policies)
         structured_query = self.rewriter_chain.invoke({"query": query})
@@ -286,31 +222,28 @@ class InsuranceRAGEngine:
             f"{' '.join(structured_query.policy_sections)}"
         ).strip()
 
-        # 3. Dual-Track Retrieval (Executes independently per policy)
-        fused_a = self._dual_track_retrieve(
-            query, bm25_string, vector_string, collection_a, ret_k
+        # 3. Retrieve via Asymmetric Ensemble (Executes independently per policy)
+        search_engine_a = self._get_search_engine(
+            collection_a, ret_k, s_weight, l_weight
         )
-        fused_b = self._dual_track_retrieve(
-            query, bm25_string, vector_string, collection_b, ret_k
+        fused_a = search_engine_a.search(query, bm25_string, vector_string)
+
+        search_engine_b = self._get_search_engine(
+            collection_b, ret_k, s_weight, l_weight
         )
+        fused_b = search_engine_b.search(query, bm25_string, vector_string)
 
         # 4. Cross-Encoder Reranking
-        s_weight = kwargs.get("semantic_weight", 0.5)
-        l_weight = kwargs.get("lexical_weight", 0.5)
         combined_rerank_string = f"{bm25_string} {vector_string}"
         best_a = self.reranker.rerank(
             combined_rerank_string,
             fused_a,
             top_k=rerank_k,
-            semantic_weight=s_weight,
-            lexical_weight=l_weight,
         )
         best_b = self.reranker.rerank(
             combined_rerank_string,
             fused_b,
             top_k=rerank_k,
-            semantic_weight=s_weight,
-            lexical_weight=l_weight,
         )
 
         # 5. Unified Single-Pass Comparative Generation
