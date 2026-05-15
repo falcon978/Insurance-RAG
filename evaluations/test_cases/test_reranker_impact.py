@@ -6,7 +6,7 @@ adds compared to raw vector search ranking.
 """
 
 import pytest
-import time
+import asyncio
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import ContextualPrecisionMetric
@@ -20,20 +20,19 @@ rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case_id, query, source, expected_snippets, keywords, reasoning",
     load_golden_dataset(),
 )
-def test_baseline_no_reranker(
+async def test_baseline_no_reranker(
     case_id, query, source, expected_snippets, keywords, reasoning
 ):
+    await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
 
-    time.sleep(eval_settings.rate_limit_delay_seconds)
-
-    # Top 3 directly from Chroma/Pinecone (No Reranker)
-    actual_output, retrieved_contexts = rag.query(
+    actual_output, retrieved_contexts = await rag.a_query(
         query=query,
-        source=source,  # The wrapper handles the mapping!
+        source=source,
         retrieve_top_k=eval_settings.retrieve_top_k,
         rerank_top_k=0,
     )
@@ -45,7 +44,6 @@ def test_baseline_no_reranker(
         expected_retrieval_context=expected_snippets,
     )
 
-    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
     precision_metric = ContextualPrecisionMetric(
         threshold=eval_settings.precision_threshold,
         model=eval_judge,
@@ -55,20 +53,19 @@ def test_baseline_no_reranker(
     assert_test(test_case, [precision_metric], run_async=False)
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case_id, query, source, expected_snippets, keywords, reasoning",
     load_golden_dataset(),
 )
-def test_advanced_with_reranker(
+async def test_advanced_with_reranker(
     case_id, query, source, expected_snippets, keywords, reasoning
 ):
+    await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
 
-    time.sleep(eval_settings.rate_limit_delay_seconds)
-
-    # Top 15 narrowed down to Top 3 via Reranker
-    actual_output, retrieved_contexts = rag.query(
+    actual_output, retrieved_contexts = await rag.a_query(
         query=query,
-        source=source,  # The wrapper handles the mapping!
+        source=source,
         retrieve_top_k=eval_settings.retrieve_top_k,
         rerank_top_k=eval_settings.rerank_top_k,
     )
@@ -80,7 +77,6 @@ def test_advanced_with_reranker(
         expected_retrieval_context=expected_snippets,
     )
 
-    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
     precision_metric = ContextualPrecisionMetric(
         threshold=eval_settings.precision_threshold,
         model=eval_judge,

@@ -6,7 +6,7 @@ Measures the retrieval performance of Pure Vector Search vs. Hybrid Search (Vect
 """
 
 import pytest
-import time
+import asyncio
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import ContextualRecallMetric
@@ -23,22 +23,21 @@ eval_judge = get_eval_judge()
 # ---------------------------------------------------------
 # TEST A: Pure Semantic Baseline
 # ---------------------------------------------------------
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case_id, query, source, expected_snippets, keywords, reasoning",
     load_golden_dataset(),
 )
-def test_pure_semantic_search(
+async def test_pure_semantic_search(
     case_id, query, source, expected_snippets, keywords, reasoning
 ):
+    await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
 
-    time.sleep(eval_settings.rate_limit_delay_seconds)
-
-    # Isolate vector search by forcing strategy="semantic"
-    actual_output, retrieved_contexts = rag.query(
+    actual_output, retrieved_contexts = await rag.a_query(
         query=query,
-        source=source,  # The wrapper handles the mapping!
+        source=source,
         retrieve_top_k=eval_settings.retrieve_top_k,
-        rerank_top_k=eval_settings.rerank_top_k,  # Set it to 0 to isolate retrieval performance without the reranker influence
+        rerank_top_k=0,
         strategy="semantic",
     )
 
@@ -49,7 +48,6 @@ def test_pure_semantic_search(
         expected_retrieval_context=expected_snippets,
     )
 
-    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
     recall_metric = ContextualRecallMetric(
         threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True
     )
@@ -60,20 +58,21 @@ def test_pure_semantic_search(
 # ---------------------------------------------------------
 # TEST B: Hybrid Search (Semantic + BM25)
 # ---------------------------------------------------------
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case_id, query, source, expected_snippets, keywords, reasoning",
     load_golden_dataset(),
 )
-def test_hybrid_search(case_id, query, source, expected_snippets, keywords, reasoning):
+async def test_hybrid_search(
+    case_id, query, source, expected_snippets, keywords, reasoning
+):
+    await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
 
-    time.sleep(eval_settings.rate_limit_delay_seconds)
-
-    # Enable lexical fusion by forcing strategy="hybrid"
-    actual_output, retrieved_contexts = rag.query(
+    actual_output, retrieved_contexts = await rag.a_query(
         query=query,
-        source=source,  # The wrapper handles the mapping!
+        source=source,
         retrieve_top_k=eval_settings.retrieve_top_k,
-        rerank_top_k=eval_settings.rerank_top_k,  # Set it to 0 to isolate retrieval performance without the reranker influence
+        rerank_top_k=0,
         strategy="hybrid",
     )
 
@@ -84,7 +83,6 @@ def test_hybrid_search(case_id, query, source, expected_snippets, keywords, reas
         expected_retrieval_context=expected_snippets,
     )
 
-    # CRITICAL FIX: Instantiate metric inside the test case to prevent state leakage
     recall_metric = ContextualRecallMetric(
         threshold=eval_settings.recall_threshold, model=eval_judge, include_reason=True
     )

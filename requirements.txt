@@ -1,4 +1,4 @@
-# Web & API
+# Web & API (Production)
 fastapi>=0.110.0
 uvicorn>=0.27.0
 python-multipart>=0.0.9
@@ -6,16 +6,16 @@ streamlit>=1.32.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
 requests>=2.31.0
-nest-asyncio>=1.6.0  # Prevents Jupyter/Colab event loop crashes
+httpx>=0.27.0  # Native async HTTP client for URL ingestion
 
 # LLM & LangChain Framework
 langchain>=0.1.13
 langchain-core>=0.1.33
 langchain-community>=0.0.28
-langchain-text-splitters>=0.0.1  # Extracted from core
+langchain-text-splitters>=0.0.1
 langchain-google-genai>=1.0.1
 langchain-huggingface>=0.0.1
-langsmith>=0.1.0  # Explicit tracing SDK
+langsmith>=0.1.0
 
 # Vector Databases
 chromadb>=0.4.24
@@ -35,12 +35,6 @@ tiktoken>=0.6.0
 # Core Data Science & Locks (ORDER MATTERS)
 numpy<2.0.0
 protobuf<5.0.0  
-spacy<3.8.0     # Added to force recompilation against numpy 1.x 
+spacy<3.8.0     
 scipy<1.13.0    
-scikit-learn<1.5.0  # Protects sentence-transformers
-pandas<2.2.0        # Protects deepeval
-
-# Evaluation & Testing
-deepeval>=1.1.2
-pytest>=8.0.0
-langchain-groq==1.1.2
+scikit-learn>=1.4.0
