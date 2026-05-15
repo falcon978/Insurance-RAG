@@ -36,6 +36,10 @@ class EvalSettings(BaseSettings):
     # Pauses the pytest loop to avoid HTTP 429 Too Many Requests errors
     rate_limit_delay_seconds: int = 30
 
+    # Dataset configuration
+    start_index: int = int(os.getenv("DATASET_START_INDEX", "0"))
+    end_index: int = int(os.getenv("DATASET_END_INDEX", "5"))
+
     class Config:
         env_file = ".env"
         extra = "ignore"

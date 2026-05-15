@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from evaluations.eval_config import eval_settings
 
 
 def load_golden_dataset(filename="golden_dataset.json"):
@@ -29,7 +30,5 @@ def load_golden_dataset(filename="golden_dataset.json"):
             item["expected_keywords"],
             item["reasoning_path"],
         )
-        for item in data[
-            :5
-        ]  # Limit to first 5 for quick testing; remove slicing for full dataset
+        for item in data[eval_settings.start_index : eval_settings.end_index]
     ]
