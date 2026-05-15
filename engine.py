@@ -146,10 +146,10 @@ class InsuranceRAGEngine:
         Runs the complete advanced retrieval and generation pipeline for a single policy.
         """
         active_history = history[-max_history_len:] if history else []
-        ret_k = kwargs.get("retrieve_top_k", 15)
-        rerank_k = kwargs.get("rerank_top_k", 5)
-        s_weight = kwargs.get("semantic_weight", 0.5)
-        l_weight = kwargs.get("lexical_weight", 0.5)
+        ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
+        rerank_k = kwargs.get("rerank_top_k", settings.default_rerank_top_k)
+        s_weight = kwargs.get("semantic_weight", settings.default_semantic_weight)
+        l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
         # 1. Generate Structured Intent
         structured_query = self.rewriter_chain.invoke({"query": query})
@@ -205,10 +205,10 @@ class InsuranceRAGEngine:
         and deterministic semantic targeting.
         """
         active_history = history[-max_history_len:] if history else []
-        ret_k = kwargs.get("retrieve_top_k", 15)
-        rerank_k = kwargs.get("rerank_top_k", 5)
-        s_weight = kwargs.get("semantic_weight", 0.5)
-        l_weight = kwargs.get("lexical_weight", 0.5)
+        ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
+        rerank_k = kwargs.get("rerank_top_k", settings.default_rerank_top_k)
+        s_weight = kwargs.get("semantic_weight", settings.default_semantic_weight)
+        l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
         # 1. Generate Structured Intent (Executes once for consistency across both policies)
         structured_query = self.rewriter_chain.invoke({"query": query})

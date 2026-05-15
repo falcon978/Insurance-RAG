@@ -33,18 +33,18 @@ class Settings(BaseSettings):
 
     # Planner LLM Configs (The "Thinker")
     planner_model_name: str = os.getenv(
-        "PLANNER_LLM_MODEL_NAME", "gemini-3.1-flash-lite-preview"
+        "PLANNER_LLM_MODEL_NAME", "gemini-3.1-flash-lite"
     )  # Fast, cheap, perfect for JSON extraction
     planner_temperature: float = 0.0  # Strictly deterministic
 
     # Default Retrieval Hyperparameters
-    default_retrieve_top_k: int = 15
-    default_rerank_top_k: int = 5
-    default_semantic_weight: float = 0.5
-    default_lexical_weight: float = 0.5
+    default_retrieve_top_k: int = os.getenv("DEFAULT_RETRIEVE_TOP_K", 15)
+    default_rerank_top_k: int = os.getenv("DEFAULT_RERANK_TOP_K", 5)
+    default_semantic_weight: float = os.getenv("DEFAULT_SEMANTIC_WEIGHT", 0.5)
+    default_lexical_weight: float = os.getenv("DEFAULT_LEXICAL_WEIGHT", 0.5)
 
     # LLM and Device Config
-    admin_password: str = "admin123"
+    admin_password: str = os.getenv("ADMIN_PASSWORD")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY")
     hf_device: str = os.getenv("HF_DEVICE", "cpu")  # Set to 'cuda' for GPU acceleration
 
