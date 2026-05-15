@@ -4,11 +4,11 @@ pipeline.py
 Orchestrator: wires PDFExtractor → MarkdownHierarchicalChunker → PolicyVectorStore.
 """
 
+import asyncio
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import logging
-import sys
 
 from config import settings  # Added centralized settings
 from .models import PolicyChunk
@@ -59,19 +59,21 @@ class ExtractionPipeline:
         if self.verbose:
             logger.info(msg)
 
-    def run(self) -> ExtractionResult:
+    async def a_run(self) -> ExtractionResult:
+        """Fully non-blocking asynchronous pipeline execution."""
         if not self.pdf_path.exists():
             raise FileNotFoundError(f"Cannot find {self.pdf_path}")
 
         t0 = time.time()
-        self._log(f"🚀 Starting Extraction Pipeline for: {self.pdf_path.name}\n")
+        self._log(f"🚀 Starting Async Extraction Pipeline for: {self.pdf_path.name}\n")
 
         # ── Phase 1: Markdown Extraction ──────────────────────────────
         self._log("Phase 1/3 — Extracting Markdown via Layout Engine …")
         extractor = PDFExtractor(str(self.pdf_path))
-        doc_meta = extractor.get_document_metadata()
-        toc = extractor.get_toc()
-        md_text = extractor.extract_markdown_with_pages()
+        # Execute sequentially to maintain a strict memory ceiling
+        doc_meta = await extractor.a_get_metadata()
+        toc = await extractor.a_get_toc()
+        md_text = await extractor.a_extract_markdown()
 
         # ── Phase 1.5: Markdown Cleaning ──────────────────────────────
         clean_md = clean_markdown_layout(md_text)
@@ -81,7 +83,7 @@ class ExtractionPipeline:
         chunker = MarkdownHierarchicalChunker(
             chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
         )
-        chunks = chunker.chunk(clean_md, self.pdf_path.name)
+        chunks = await chunker.a_chunk(clean_md, self.pdf_path.name)
         self._log(f"           {len(chunks)} RAG chunks created")
 
         # ── Phase 3: Index ────────────────────────────────────────────
@@ -91,9 +93,9 @@ class ExtractionPipeline:
         store = PolicyVectorStore(
             collection_name=self.collection_name,
             device=self.device,
-        )  # Removed the invalid persist_directory argument!
+        )
 
-        store.index_chunks(chunks)
+        await store.a_index_chunks(chunks)
 
         elapsed = round(time.time() - t0, 2)
         avg_chars = int(sum(len(c.text) for c in chunks) / max(len(chunks), 1))

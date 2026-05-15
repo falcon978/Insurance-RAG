@@ -5,6 +5,7 @@ Phase 1: PDF to Markdown Extraction.
 Uses PyMuPDF4LLM's advanced layout engine to extract structurally perfect Markdown.
 """
 
+import asyncio
 import pymupdf
 import pymupdf4llm
 from pathlib import Path
@@ -63,3 +64,12 @@ class PDFExtractor:
                 {"level": entry[0], "title": entry[1], "page": entry[2]}
                 for entry in doc.get_toc()
             ]
+
+    async def a_extract_markdown(self) -> str:
+        return await asyncio.to_thread(self.extract_markdown_with_pages)
+
+    async def a_get_metadata(self) -> dict:
+        return await asyncio.to_thread(self.get_document_metadata)
+
+    async def a_get_toc(self) -> list[dict]:
+        return await asyncio.to_thread(self.get_toc)

@@ -10,6 +10,7 @@ Responsibilities:
 4. Handles unified single-pass adjudication and conversational state memory.
 """
 
+import asyncio
 import os
 import pickle
 import logging
@@ -134,7 +135,7 @@ class InsuranceRAGEngine:
         """Cleans and formats raw collection names for UI presentation."""
         return collection_name.replace("insurance_", "").replace("_", " ").title()
 
-    def query_single_policy(
+    async def a_query_single_policy(
         self,
         query: str,
         collection_name: str,
@@ -143,7 +144,7 @@ class InsuranceRAGEngine:
         **kwargs,
     ) -> str:
         """
-        Runs the complete advanced retrieval and generation pipeline for a single policy.
+        Orchestrates the retrieval and generation pipeline for a single policy.
         """
         active_history = history[-max_history_len:] if history else []
         ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
@@ -151,8 +152,8 @@ class InsuranceRAGEngine:
         s_weight = kwargs.get("semantic_weight", settings.default_semantic_weight)
         l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
-        # 1. Generate Structured Intent
-        structured_query = self.rewriter_chain.invoke({"query": query})
+        # 1. Generate Structured Intent Representation for Retrieval Optimization
+        structured_query = await self.rewriter_chain.ainvoke({"query": query})
 
         # 2. Pre-Process Search Strings
         bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
@@ -171,27 +172,28 @@ class InsuranceRAGEngine:
         search_engine = self._get_search_engine(
             collection_name, ret_k, s_weight, l_weight
         )
-        fused_docs = search_engine.search(
+        fused_docs = await search_engine.a_search(
             original_query=query, bm25_string=bm25_string, vector_string=vector_string
         )
 
         # 4. Cross-Encoder Reranking
         # Concatenates the lexical and semantic strings to provide comprehensive context to the Cross-Encoder.
         combined_rerank_string = f"{bm25_string} {vector_string}"
-        best_docs = self.reranker.rerank(
-            combined_rerank_string, fused_docs, top_k=rerank_k
+
+        best_docs = await self.reranker.a_rerank(
+            query=combined_rerank_string, documents=fused_docs, top_k=rerank_k
         )
 
         # 5. Unified Single-Pass Generation
         # Passes the original query to the generator to preserve user tone and intent.
-        return self.generator.generate_single_answer(
+        return await self.generator.a_generate_single_answer(
             query=query,
             docs=best_docs,
             policy_name=self._format_policy_name(collection_name),
             history=active_history,
         )
 
-    def compare_policies(
+    async def a_compare_policies(
         self,
         query: str,
         collection_a: str,
@@ -201,8 +203,7 @@ class InsuranceRAGEngine:
         **kwargs,
     ) -> str:
         """
-        Runs the comparison pipeline independently for two policies, ensuring strict isolation
-        and deterministic semantic targeting.
+        Orchestrates the independent comparative retrieval and generation pipeline.
         """
         active_history = history[-max_history_len:] if history else []
         ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
@@ -211,7 +212,7 @@ class InsuranceRAGEngine:
         l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
         # 1. Generate Structured Intent (Executes once for consistency across both policies)
-        structured_query = self.rewriter_chain.invoke({"query": query})
+        structured_query = await self.rewriter_chain.ainvoke({"query": query})
 
         # 2. Pre-Process Search Strings
         bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
@@ -222,32 +223,35 @@ class InsuranceRAGEngine:
             f"{' '.join(structured_query.policy_sections)}"
         ).strip()
 
+        logger.info(f"[Comparative Retrieval] '{collection_a}' vs '{collection_b}'")
+        logger.info(f"[BM25 Query] '{bm25_string}'")
+        logger.info(f"[Vector Query] '{vector_string}'")
+
         # 3. Retrieve via Asymmetric Ensemble (Executes independently per policy)
         search_engine_a = self._get_search_engine(
             collection_a, ret_k, s_weight, l_weight
         )
-        fused_a = search_engine_a.search(query, bm25_string, vector_string)
-
         search_engine_b = self._get_search_engine(
             collection_b, ret_k, s_weight, l_weight
         )
-        fused_b = search_engine_b.search(query, bm25_string, vector_string)
+
+        # Executes retrieval for both collections concurrently
+        fused_a, fused_b = await asyncio.gather(
+            search_engine_a.a_search(query, bm25_string, vector_string),
+            search_engine_b.a_search(query, bm25_string, vector_string),
+        )
 
         # 4. Cross-Encoder Reranking
         combined_rerank_string = f"{bm25_string} {vector_string}"
-        best_a = self.reranker.rerank(
-            combined_rerank_string,
-            fused_a,
-            top_k=rerank_k,
-        )
-        best_b = self.reranker.rerank(
-            combined_rerank_string,
-            fused_b,
-            top_k=rerank_k,
+
+        # Delegates CPU-bound reranking tasks to background threads concurrently
+        best_a, best_b = await asyncio.gather(
+            self.reranker.a_rerank(combined_rerank_string, fused_a, top_k=rerank_k),
+            self.reranker.a_rerank(combined_rerank_string, fused_b, top_k=rerank_k),
         )
 
         # 5. Unified Single-Pass Comparative Generation
-        return self.generator.generate_comparison(
+        return await self.generator.a_generate_comparison(
             query=query,
             docs_a=best_a,
             name_a=self._format_policy_name(collection_a),

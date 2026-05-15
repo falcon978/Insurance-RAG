@@ -6,6 +6,7 @@ Isolating this allows for easy swapping of reranking strategies (e.g., Cohere AP
 without altering the core retrieval logic.
 """
 
+import asyncio
 import logging
 from typing import List, Tuple, Union
 from langchain_core.documents import Document
@@ -67,3 +68,15 @@ class ContextReranker:
 
         # Extract and return just the Document objects (dropping the score tuple) for the standard pipeline
         return [doc for doc, score in scored_docs[:top_k]]
+
+    async def a_rerank(
+        self,
+        query: str,
+        documents: List[Document],
+        top_k: int = 4,
+        return_scores: bool = False,
+    ) -> Union[List[Document], List[Tuple[Document, float]]]:
+        """Safely executes the CPU-bound reranking task in a background thread."""
+        return await asyncio.to_thread(
+            self.rerank, query, documents, top_k, return_scores
+        )

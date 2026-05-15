@@ -3,7 +3,7 @@ rag/generator.py
 ----------------
 Manages the LLM and implements the Unified Single-Pass Architecture (Chain of Thought).
 Uses a custom LangChain Output Parser (SentinelOutputParser) to safely extract
-JSON and Markdown from unique sentinels (<<<BEGIN>>>), bypassing XML-conflict hallucinations.
+JSON and Markdown from unique sentinels.
 """
 
 import re
@@ -14,8 +14,6 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from rag.utils import format_retrieved_context
-
-# Import the new unified templates
 from rag.generation_prompts import (
     single_policy_unified_template,
     compare_policies_unified_template,
@@ -86,29 +84,27 @@ class SentinelOutputParser(BaseOutputParser[dict]):
 
 class ResponseGenerator:
     """
-    Handles prompt population and LLM generation using Google Gemini.
+    Handles prompt population and LLM generation.
     """
 
     def __init__(self, api_key: str, model_name: str = "gemini-3-flash-preview"):
-        logger.info(
-            f"Initializing LLM: {model_name} for Unified Single-Pass Generation"
-        )
+        logger.info(f"Initializing generator with model: {model_name}")
         self.llm = ChatGoogleGenerativeAI(
             model=model_name,
-            temperature=0.0,  # Deterministic logic is mandatory
+            temperature=0.0,
             api_key=api_key,
         )
         # Instantiate the LCEL parser once
         self.parser = SentinelOutputParser()
 
-    def generate_single_answer(
+    async def a_generate_single_answer(
         self,
         query: str,
         docs: List[Document],
         policy_name: str,
         history: Optional[List] = None,
     ) -> str:
-        """Runs the single-pass pipeline for a single policy with history."""
+        """Executes the generation pipeline for a single policy asynchronously with history."""
         if not docs:
             return (
                 "No relevant context was found in the policy database for this query."
@@ -119,15 +115,15 @@ class ResponseGenerator:
         # LCEL execution: Prompt -> LLM -> Custom Sentinel Parser
         chain = single_policy_unified_template | self.llm | self.parser
 
-        # invoke() returns the dictionary defined in SentinelOutputParser
-        parsed_result = chain.invoke(
+        # ainvoke() returns the dictionary defined in SentinelOutputParser
+        parsed_result = await chain.ainvoke(
             {"context": context_string, "query": query, "history": history or []}
         )
 
         # Return just the Markdown report for the UI
         return parsed_result["advisory_report"]
 
-    def generate_comparison(
+    async def a_generate_comparison(
         self,
         query: str,
         docs_a: List[Document],
@@ -136,7 +132,7 @@ class ResponseGenerator:
         name_b: str,
         history: Optional[List] = None,
     ) -> str:
-        """Runs the single-pass comparative pipeline across two policies with history."""
+        """Executes the comparative generation pipeline across two policies asynchronously."""
         context_a = (
             format_retrieved_context(docs_a, name_a) if docs_a else "No context found."
         )
@@ -147,8 +143,8 @@ class ResponseGenerator:
         # LCEL execution: Prompt -> LLM -> Custom Sentinel Parser
         chain = compare_policies_unified_template | self.llm | self.parser
 
-        # invoke() returns the dictionary defined in SentinelOutputParser
-        parsed_result = chain.invoke(
+        # ainvoke() returns the dictionary defined in SentinelOutputParser
+        parsed_result = await chain.ainvoke(
             {
                 "context_a": context_a,
                 "context_b": context_b,

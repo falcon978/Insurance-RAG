@@ -7,6 +7,7 @@ Takes raw Markdown from the PDF layout engine, splits it by structural headers,
 applies standard sizing, and injects the parent-child lineage directly into the text payload.
 """
 
+import asyncio
 import hashlib
 import re
 import logging
@@ -121,3 +122,7 @@ class MarkdownHierarchicalChunker:
             )
 
         return policy_chunks
+
+    async def a_chunk(self, md_text: str, source_file: str) -> list[PolicyChunk]:
+        """Non-blocking wrapper for semantic chunking."""
+        return await asyncio.to_thread(self.chunk, md_text, source_file)

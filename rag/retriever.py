@@ -3,17 +3,16 @@ rag/retriever.py
 ----------------
 Executes Asymmetric Ensemble Retrieval.
 Orchestrates parallel multi-string searches across Vector and Lexical databases
-and merges them using Two-Stage Reciprocal Rank Fusion.
+and merges them using Two-Stage Reciprocal Rank Fusion via asynchronous execution.
 """
 
 import logging
-import concurrent.futures
+import asyncio
 from typing import List, Optional
 from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
-# Import fusion utilities for merging results
 from rag.utils import fuse_multi_query_results, fuse_weighted_results
 
 logger = logging.getLogger(__name__)
@@ -52,15 +51,11 @@ class DocumentSearch:
         if self.bm25_retriever:
             self.bm25_retriever.k = self.top_k
 
-    def search(
+    async def a_search(
         self, original_query: str, bm25_string: str, vector_string: str
     ) -> List[Document]:
         """
-        Executes the Asymmetric Ensemble Retrieval Pipeline.
-
-        Process:
-        1. Runs 3 parallel searches (BM25 Lexical, Vector Original, Vector Dense).
-        2. Applies Two-Stage Reciprocal Rank Fusion (Lexical/Semantic Split).
+        Executes the Asymmetric Ensemble Retrieval Pipeline asynchronously.
 
         Args:
             original_query (str): The original user query.
@@ -70,25 +65,19 @@ class DocumentSearch:
         Returns:
             List[Document]: The fused and ranked document list.
         """
-        # Parallel Database Execution to minimize sequential latency
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Path A: Vector search on the original query (Semantic Anchor)
-            future_vec_orig = executor.submit(
-                self.vector_retriever.invoke, original_query
-            )
+        tasks = [
+            self.vector_retriever.ainvoke(original_query),
+            self.vector_retriever.ainvoke(vector_string),
+        ]
 
-            # Path B: Vector search on the dense semantic string (Bridging Vocabulary)
-            future_vec_legal = executor.submit(
-                self.vector_retriever.invoke, vector_string
-            )
+        if self.bm25_retriever:
+            tasks.append(self.bm25_retriever.ainvoke(bm25_string))
 
-            # Path C: BM25 search on the lexical string (Original intent + Clinical Terms)
-            if self.bm25_retriever:
-                future_bm25 = executor.submit(self.bm25_retriever.invoke, bm25_string)
+        results = await asyncio.gather(*tasks)
 
-            docs_vec_orig = future_vec_orig.result()
-            docs_vec_legal = future_vec_legal.result()
-            docs_bm25 = future_bm25.result() if self.bm25_retriever else []
+        docs_vec_orig = results[0]
+        docs_vec_legal = results[1]
+        docs_bm25 = results[2] if self.bm25_retriever else []
 
         # Two-Stage Reciprocal Rank Fusion
         # Stage 1: Standard unweighted fusion of the two Semantic tracks

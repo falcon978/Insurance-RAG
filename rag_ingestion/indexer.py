@@ -14,6 +14,7 @@ Key Features:
   - BM25 Deduplication: Prevents bloating the local pickle file with duplicate documents.
 """
 
+import asyncio
 import os
 import pickle
 import logging
@@ -88,6 +89,10 @@ class PolicyVectorStore:
         # Create a specific pickle file for this collection
         return os.path.join(settings.bm25_dir, f"{self.collection_name}_bm25.pkl")
 
+    async def _a_is_namespace_populated(self) -> bool:
+        """Async check for namespace population."""
+        return await asyncio.to_thread(self._is_namespace_populated)
+
     def _is_namespace_populated(self) -> bool:
         """
         Checks if the current namespace/collection already contains vectors.
@@ -144,10 +149,8 @@ class PolicyVectorStore:
 
         return documents, ids
 
-    def _upsert_to_vector_db(
-        self, documents: List[Document], ids: List[str], batch_size: int
-    ):
-        """Handles batch upserting embeddings into the configured Vector DB."""
+    async def _a_upsert_to_vector_db(self, documents, ids, batch_size: int):
+        """Asynchronous batch upsert to the configured Vector DB."""
         total_batches = (len(documents) + batch_size - 1) // batch_size
         logging.info(
             f"Adding {len(documents)} chunks to {settings.vector_db_type.upper()} in {total_batches} batches..."
@@ -156,8 +159,14 @@ class PolicyVectorStore:
         for i in range(0, len(documents), batch_size):
             batch_docs = documents[i : i + batch_size]
             batch_ids = ids[i : i + batch_size]
-            self.vector_store.add_documents(documents=batch_docs, ids=batch_ids)
+            # Use LangChain's native async add method
+            await self.vector_store.aadd_documents(documents=batch_docs, ids=batch_ids)
             logging.info(f"  Processed batch {(i//batch_size) + 1}/{total_batches}")
+
+    async def _a_upsert_to_bm25(self, documents):
+        """Pickle is synchronous disk I/O, so we thread it."""
+        async with self._bm25_io_lock:
+            await asyncio.to_thread(self._upsert_to_bm25, documents)
 
     def _upsert_to_bm25(self, documents: List[Document]):
         """Persists the raw documents to a local Pickle file for BM25 hybrid search."""
@@ -199,10 +208,8 @@ class PolicyVectorStore:
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")
 
-    def index_chunks(self, chunks: List[PolicyChunk], batch_size: int = 100):
-        """
-        Orchestrates the dual-indexing process.
-        """
+    async def a_index_chunks(self, chunks, batch_size: int = 100):
+        """Async orchestrator for the dual-indexing process."""
         if not chunks:
             logging.info("No chunks provided to index.")
             return
@@ -210,17 +217,20 @@ class PolicyVectorStore:
         documents, ids = self._prepare_documents(chunks)
 
         # 1. Handle Vector DB Upsert (with Idempotent Check)
-        if self._is_namespace_populated():
+        if await self._a_is_namespace_populated():
             logging.info(
                 f"Namespace/Collection '{self.collection_name}' already contains vectors. Skipping Vector DB ingestion."
             )
         else:
-            self._upsert_to_vector_db(documents, ids, batch_size)
+            # Note: LangChain's PineconeVectorStore implements native asynchronous I/O.
+            # Chroma lacks a native async client; LangChain's base VectorStore handles
+            # this safely by routing aadd_documents to a background ThreadPoolExecutor.
+            await self._a_upsert_to_vector_db(documents, ids, batch_size)
 
         # 2. Handle BM25 Persistence (Always run, relies on internal deduplication)
-        self._upsert_to_bm25(documents)
+        await self._a_upsert_to_bm25(documents)
 
-        logging.info("Indexing orchestration complete!")
+        logging.info("Async Indexing complete!")
 
     def get_retriever(self, k: int = 4):
         """

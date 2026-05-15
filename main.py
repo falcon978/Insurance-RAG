@@ -42,9 +42,9 @@ rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
 
 
 @app.post("/api/v1/query/single", response_model=StandardResponse)
-def query_single(req: SingleQueryRequest):
+async def query_single(req: SingleQueryRequest):
     try:
-        answer = rag_engine.query_single_policy(
+        answer = await rag_engine.a_query_single_policy(
             query=req.query,
             collection_name=req.collection_name,
             history=req.history,
@@ -53,17 +53,18 @@ def query_single(req: SingleQueryRequest):
         )
         return StandardResponse(
             status="success",
-            message="Query processed",
+            message="Query processed successfully.",
             data={"markdown_report": answer},
         )
     except Exception as e:
+        logger.error(f"Error processing single query: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/v1/query/compare", response_model=StandardResponse)
-def query_compare(req: CompareQueryRequest):
+async def query_compare(req: CompareQueryRequest):
     try:
-        answer = rag_engine.compare_policies(
+        answer = await rag_engine.a_compare_policies(
             query=req.query,
             collection_a=req.collection_a,
             collection_b=req.collection_b,
@@ -73,10 +74,11 @@ def query_compare(req: CompareQueryRequest):
         )
         return StandardResponse(
             status="success",
-            message="Comparison processed",
+            message="Comparison processed successfully.",
             data={"markdown_report": answer},
         )
     except Exception as e:
+        logger.error(f"Error processing comparison query: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -84,7 +86,7 @@ def query_compare(req: CompareQueryRequest):
 
 
 @app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
-def list_collections():
+async def list_collections():
     try:
         if settings.vector_db_type == "pinecone":
             import pinecone
@@ -108,7 +110,7 @@ def list_collections():
 
 
 @app.delete("/api/v1/admin/collections/{collection_name}")
-def delete_collection(collection_name: str):
+async def delete_collection(collection_name: str):
     try:
         if settings.vector_db_type == "pinecone":
             import pinecone
@@ -134,32 +136,53 @@ def delete_collection(collection_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/admin/ingest/file")
-async def ingest_file(collection_name: str = Form(...), file: UploadFile = File(...)):
-    """Handles PDF upload and triggers the Extraction Pipeline."""
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-
+@app.post("/api/v1/admin/ingest/url")
+async def ingest_url(req: UrlIngestRequest):
+    """
+    Downloads and indexes a PDF from a provided URL using non-blocking network I/O.
+    """
     tmp_path = ""
     try:
+        # 1. Execute non-blocking network request
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    str(req.url),
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    follow_redirects=True,
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+            except httpx.RequestError as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"Error requesting {exc.request.url}."
+                )
+            except httpx.HTTPStatusError as exc:
+                raise HTTPException(
+                    status_code=exc.response.status_code,
+                    detail=f"Error response {exc.response.status_code} while requesting {exc.request.url}.",
+                )
+
+        # 2. Write the retrieved bytes to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            shutil.copyfileobj(file.file, tmp)
+            tmp.write(response.content)
             tmp_path = tmp.name
 
-        ExtractionPipeline(pdf_path=tmp_path, collection_name=collection_name).run()
+        # 3. Execute the asynchronous extraction pipeline
+        await ExtractionPipeline(
+            pdf_path=tmp_path, collection_name=req.collection_name
+        ).a_run()
 
-        return StandardResponse(
-            status="success", message=f"Successfully indexed {file.filename}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        return StandardResponse(status="success", message="URL indexed successfully.")
+
     finally:
+        # 4. Ensure cleanup occurs regardless of pipeline success/failure
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 
 @app.post("/api/v1/admin/ingest/url")
-def ingest_url(req: UrlIngestRequest):
+async def ingest_url(req: UrlIngestRequest):
     tmp_path = ""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -169,7 +192,9 @@ def ingest_url(req: UrlIngestRequest):
             )
             tmp.write(r.read())
             tmp_path = tmp.name
-        ExtractionPipeline(pdf_path=tmp_path, collection_name=req.collection_name).run()
+        await ExtractionPipeline(
+            pdf_path=tmp_path, collection_name=req.collection_name
+        ).a_run()
         return StandardResponse(status="success", message="URL indexed")
     finally:
         if tmp_path and os.path.exists(tmp_path):
