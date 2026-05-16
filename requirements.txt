@@ -23,6 +23,9 @@ langchain-chroma>=0.1.0
 pinecone-client>=3.1.0
 langchain-pinecone>=0.1.0
 
+# Lexical Databases
+redis>=5.0.0
+
 # Retrieval & Reranking
 rank-bm25>=0.2.2
 sentence-transformers>=2.6.0
