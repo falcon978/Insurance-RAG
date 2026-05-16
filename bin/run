@@ -19,7 +19,7 @@ echo "Allocating $WORKERS workers for optimal concurrency."
 # Start the server
 exec uvicorn main:app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port 7860 \
     --workers $WORKERS \
     --proxy-headers \
     --forwarded-allow-ips="*"

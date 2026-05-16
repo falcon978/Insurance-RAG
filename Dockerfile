@@ -30,10 +30,11 @@ COPY . .
 RUN chmod +x bin/run
 
 # Expose the port FastAPI will run on
-EXPOSE 8000
+# Hugging Face requires port 7860
+EXPOSE 7860
 
 # OPTION A: Run directly via Uvicorn (No bin/run required)
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "4"]
 
 # OPTION B: Run via the entrypoint script (Recommended)
 CMD ["./bin/run"]

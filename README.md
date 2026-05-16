@@ -1,3 +1,12 @@
+---
+title: Insurance RAG
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+---
+
 # Insurance RAG: Legal-Grade Policy Analysis Engine
 
 An advanced Retrieval-Augmented Generation (RAG) system designed to parse, index, and analyze complex insurance policy documents with high legal accuracy. This system utilizes a **Unified Single-Pass Architecture** to provide conversational clarity while maintaining strict adherence to policy clauses, waiting periods, and exclusions.
