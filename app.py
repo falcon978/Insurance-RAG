@@ -221,8 +221,15 @@ with tab_admin:
         # Section B: Ingestion Pipeline
         st.markdown("#### 📥 Add New Document")
         doc_key = (
-            st.text_input("Collection Key (e.g., 'care_supreme_2024')").strip().lower()
+            st.text_input(
+                "Collection Key",
+                placeholder="insurance_care_supreme_2024",
+                help="Must be lowercase and alphanumeric. The system will automatically prepend 'insurance_' if you omit it.",
+            )
+            .strip()
+            .lower()
         )
+
         ingest_method = st.radio(
             "Source Type", ["File Upload", "Web URL"], horizontal=True
         )
