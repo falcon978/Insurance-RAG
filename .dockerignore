@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Environments
+.env
+.venv
+venv/
+env/
+
+# Cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local databases and caches
+chroma_data/
+bm25_cache/
+*.pkl
+*.sqlite3
+
+# Jupyter Notebooks
+notebooks/
+*.ipynb
+
+# Evaluation Data
+eval_results/
