@@ -6,6 +6,7 @@ Orchestrates parallel multi-string searches across Vector and Lexical databases
 and merges them using Two-Stage Reciprocal Rank Fusion via asynchronous execution.
 """
 
+import re
 import logging
 import asyncio
 from typing import List, Optional
@@ -18,7 +19,58 @@ from rag.utils import fuse_multi_query_results, fuse_weighted_results
 logger = logging.getLogger(__name__)
 
 
+class UpstashRediSearchRetriever:
+    """
+    Custom LangChain-compatible retriever that executes full-text BM25
+    searches natively on an Upstash Redis database via RediSearch.
+    This offloads heavy tokenization and BM25 math from the Python server.
+    """
+
+    def __init__(self, redis_url: str, collection_name: str, k: int = 15):
+        import redis.asyncio as redis
+
+        self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        self.index_name = f"idx:{collection_name}"
+        self.k = k
+
+    async def ainvoke(self, query: str) -> List[Document]:
+        from redis.commands.search.query import Query
+
+        try:
+            # RediSearch syntax reserves punctuation; strip it for safe token matching
+            clean_query = re.sub(r"[^\w\s]", " ", query).strip()
+            if not clean_query:
+                return []
+
+            # Execute native BM25 search on the Upstash server
+            q = Query(clean_query).paging(0, self.k)
+            res = await self.redis_client.ft(self.index_name).search(q)
+
+            docs = []
+            for doc in res.docs:
+                # RediSearch stores metadata as strings; reconstruct the LangChain Document
+                metadata = {
+                    key: val
+                    for key, val in doc.__dict__.items()
+                    if key not in ["id", "payload", "text"]
+                }
+                docs.append(
+                    Document(page_content=getattr(doc, "text", ""), metadata=metadata)
+                )
+
+            return docs
+        except Exception as e:
+            logger.error(f"Upstash RediSearch query failed: {e}")
+            return []
+        finally:
+            await self.redis_client.aclose()
+
+
 class DocumentSearch:
+    """
+    Orchestrates Hybrid Retrieval by fusing results from semantic and lexical searches.
+    """
+
     def __init__(
         self,
         vector_store: VectorStore,
@@ -33,7 +85,7 @@ class DocumentSearch:
 
         Args:
             vector_store: Any LangChain VectorStore (Chroma, Pinecone, etc.).
-            bm25_retriever: A pre-built BM25 retriever cached by the Engine.
+            bm25_retriever: Optional BM25 retriever (local or Upstash) for lexical search.
             top_k: Number of documents to retrieve per retrieval branch.
             semantic_weight: Weight given to semantic (vector) results during final fusion.
             lexical_weight: Weight given to lexical (BM25) results during final fusion.
@@ -48,22 +100,18 @@ class DocumentSearch:
         self.vector_retriever = self.vector_store.as_retriever(
             search_kwargs={"k": self.top_k}
         )
-        if self.bm25_retriever:
+
+        # Upstash custom retriever handles 'k' internally during init,
+        # but LangChain's local BM25 requires setting it as an attribute
+        if hasattr(self.bm25_retriever, "k"):
             self.bm25_retriever.k = self.top_k
 
     async def a_search(
         self, original_query: str, bm25_string: str, vector_string: str
     ) -> List[Document]:
         """
-        Executes the Asymmetric Ensemble Retrieval Pipeline asynchronously.
-
-        Args:
-            original_query (str): The original user query.
-            bm25_string (str): The string optimized for sparse lexical retrieval.
-            vector_string (str): The string optimized for dense semantic retrieval.
-
-        Returns:
-            List[Document]: The fused and ranked document list.
+        Executes the Asymmetric Ensemble Retrieval Pipeline asynchronously and manually calculates the
+        Reciprocal Rank Fusion (RRF) scores to combine the contexts.
         """
         tasks = [
             self.vector_retriever.ainvoke(original_query),
@@ -83,7 +131,7 @@ class DocumentSearch:
         # Stage 1: Standard unweighted fusion of the two Semantic tracks
         semantic_fused = fuse_multi_query_results([docs_vec_orig, docs_vec_legal])
 
-        # Stage 2: Weighted fusion of Semantic vs. Lexical tracks
+        # Stage 2: Weighted fusion of the semantic super-set with the lexical track
         final_fused = fuse_weighted_results(
             list_a=semantic_fused,
             list_b=docs_bm25,

@@ -6,8 +6,8 @@ Isolating this allows for easy swapping of reranking strategies (e.g., Cohere AP
 without altering the core retrieval logic.
 """
 
-import asyncio
 import logging
+import asyncio
 from typing import List, Tuple, Union
 from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
@@ -63,10 +63,10 @@ class ContextReranker:
         scored_docs.sort(key=lambda x: x[1], reverse=True)
 
         if return_scores:
-            # Notebooks use this to plot confidence distributions
+            # Notebooks and diagnostics use this to plot confidence distributions
             return [(doc, float(score)) for doc, score in scored_docs[:top_k]]
 
-        # Extract and return just the Document objects (dropping the score tuple) for the standard pipeline
+        # Extract and return just the Document objects for the standard pipeline
         return [doc for doc, score in scored_docs[:top_k]]
 
     async def a_rerank(

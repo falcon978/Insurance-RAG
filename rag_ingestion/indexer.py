@@ -1,17 +1,18 @@
 """
 indexer.py
 -----------------------
-Phase 4: Vector Embedding and Local Lexical Indexing.
+Phase 4: Vector Embedding and Lexical Indexing.
 
-This module acts as a factory for the vector database, supporting both
-Chroma (local) and Pinecone (cloud). It also handles the persistence of
-a local text corpus to allow for decoupled BM25 keyword search.
+This module acts as the data ingestion DAO (Data Access Object). It delegates
+the instantiation of the Vector DB to the central Factory, while retaining
+the specialized pipeline logic required to batch upload documents to
+local RAM pickles or a serverless Upstash RediSearch engine.
 
 Key Features:
-  - Idempotent Upserts: Uses your custom `chunk_id` so re-running the script
+  - Idempotent Upserts: Uses a custom `chunk_id` so re-running the script
     updates existing chunks rather than duplicating them.
   - Namespace Checks: Checks if the vector namespace is already populated before hitting APIs.
-  - BM25 Deduplication: Prevents bloating the local pickle file with duplicate documents.
+  - Concurrent Safety: Implements global async locks for file I/O operations.
 """
 
 import asyncio
@@ -20,18 +21,12 @@ import pickle
 import logging
 from typing import List, Tuple
 
-# Conditional imports for Vector DB providers
-from langchain_chroma import Chroma
-
-try:
-    from langchain_pinecone import PineconeVectorStore
-except ImportError:
-    PineconeVectorStore = None
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 
+# Internal Module Imports
 from config import settings
+from rag.factories import VectorStoreFactory
 from .models import PolicyChunk
 
 logger = logging.getLogger(__name__)
@@ -39,92 +34,31 @@ logger = logging.getLogger(__name__)
 
 class PolicyVectorStore:
 
-    # Class-level attribute to ensure a globally shared lock across all instances.
+    # Class-level attribute to ensure a globally shared lock across all concurrent instances.
     _bm25_io_lock = None
 
     def __init__(self, collection_name: str, device: str = "cpu"):
         """
-        Initializes the embedding model and connects to the configured Vector DB.
-
-        Args:
-            collection_name: The name of the collection (Chroma) or Namespace (Pinecone).
-            device: 'cpu' or 'cuda' for embedding generation.
+        Initializes the embedding model and delegates Vector DB connection to the Factory.
         """
         # Lazy instantiation ensures the lock is safely bound to the active asyncio event loop.
         if PolicyVectorStore._bm25_io_lock is None:
             PolicyVectorStore._bm25_io_lock = asyncio.Lock()
 
         self.collection_name = collection_name
+        self.device = device
 
         # 1. Initialize Shared Embedding Model Dynamically
-        logging.info(f"Initializing embedding model ({settings.embed_model_name})...")
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.embed_model_name,
-            model_kwargs={"device": device},
-            encode_kwargs={
-                "normalize_embeddings": True
-            },  # Required for cosine similarity
+            model_kwargs={"device": self.device},
+            encode_kwargs={"normalize_embeddings": True},  # Enforces L2 Normalization
         )
 
-        # 2. Factory Initialization: Route to Pinecone or Chroma
-        if settings.vector_db_type == "pinecone":
-            if PineconeVectorStore is None:
-                raise ImportError("langchain-pinecone is not installed.")
-
-            logging.info(
-                f"Connecting to Pinecone Index: {settings.pinecone_index_name} (Namespace: {collection_name})"
-            )
-            self.vector_store = PineconeVectorStore(
-                index_name=settings.pinecone_index_name,
-                embedding=self.embeddings,
-                pinecone_api_key=settings.pinecone_api_key,
-                namespace=collection_name,
-            )
-        else:
-            logging.info(
-                f"Connecting to local Chroma database at: {settings.chroma_dir}"
-            )
-            self.vector_store = Chroma(
-                collection_name=collection_name,
-                embedding_function=self.embeddings,
-                persist_directory=settings.chroma_dir,
-            )
-
-    def _get_bm25_path(self) -> str:
-        """Returns the stable path for the local BM25 document corpus."""
-        # Use the dedicated BM25 directory
-        os.makedirs(settings.bm25_dir, exist_ok=True)
-        # Create a specific pickle file for this collection
-        return os.path.join(settings.bm25_dir, f"{self.collection_name}_bm25.pkl")
-
-    async def _a_is_namespace_populated(self) -> bool:
-        """Async check for namespace population."""
-        return await asyncio.to_thread(self._is_namespace_populated)
-
-    def _is_namespace_populated(self) -> bool:
-        """
-        Checks if the current namespace/collection already contains vectors.
-        This prevents redundant embedding calculations and API calls.
-        """
-        try:
-            if settings.vector_db_type == "pinecone":
-                # Pinecone specific stats check
-                stats = self.vector_store._index.describe_index_stats()
-                namespaces = stats.get("namespaces", {})
-                if (
-                    self.collection_name in namespaces
-                    and namespaces[self.collection_name]["vector_count"] > 0
-                ):
-                    return True
-            else:
-                # ChromaDB specific stats check
-                count = self.vector_store._collection.count()
-                if count > 0:
-                    return True
-        except Exception as e:
-            logging.warning(f"Could not verify namespace stats, assuming empty: {e}")
-
-        return False
+        # 2. Delegate Vector Database creation to the Factory
+        self.vector_store = VectorStoreFactory.get_vector_store(
+            collection_name=self.collection_name, embeddings=self.embeddings
+        )
 
     def _prepare_documents(
         self, chunks: List[PolicyChunk]
@@ -157,7 +91,49 @@ class PolicyVectorStore:
 
         return documents, ids
 
-    async def _a_upsert_to_vector_db(self, documents, ids, batch_size: int):
+    async def _a_is_namespace_populated(self) -> bool:
+        """
+        Non-blocking administrative check to verify if the collection contains existing vectors.
+        This prevents redundant embedding calculations and API calls.
+        """
+
+        def check():
+            if settings.vector_db_type == "pinecone":
+                try:
+                    # Fast check using the existing internal Pinecone client
+                    stats = self.vector_store._index.describe_index_stats()
+
+                    # Handle Pinecone SDK variations (Object vs Dict)
+                    namespaces = (
+                        stats.namespaces
+                        if hasattr(stats, "namespaces")
+                        else stats.get("namespaces", {})
+                    )
+
+                    namespace_data = namespaces.get(self.collection_name, {})
+
+                    # Safely extract vector_count whether namespace_data is a dict or an object
+                    vector_count = (
+                        namespace_data.get("vector_count", 0)
+                        if isinstance(namespace_data, dict)
+                        else getattr(namespace_data, "vector_count", 0)
+                    )
+
+                    return vector_count > 0
+                except Exception:
+                    return False
+            else:
+                try:
+                    # Chroma-specific ID extraction
+                    return self.vector_store._collection.count() > 0
+                except Exception:
+                    return False
+
+        return await asyncio.to_thread(check)
+
+    async def _a_upsert_to_vector_db(
+        self, documents: List[Document], ids: List[str], batch_size: int
+    ):
         """Asynchronous batch upsert to the configured Vector DB."""
         total_batches = (len(documents) + batch_size - 1) // batch_size
         logging.info(
@@ -167,34 +143,27 @@ class PolicyVectorStore:
         for i in range(0, len(documents), batch_size):
             batch_docs = documents[i : i + batch_size]
             batch_ids = ids[i : i + batch_size]
-            # Use LangChain's native async add method
+
+            # Use LangChain's native async add method (safely threads if provider lacks native async)
             await self.vector_store.aadd_documents(documents=batch_docs, ids=batch_ids)
             logging.info(f"  Processed batch {(i//batch_size) + 1}/{total_batches}")
 
-    async def _a_upsert_to_bm25(self, documents):
-        """Pickle is synchronous disk I/O, so we thread it."""
-        async with self._bm25_io_lock:
-            await asyncio.to_thread(self._upsert_to_bm25, documents)
-
     def _upsert_to_bm25(self, documents: List[Document]):
-        """Persists the raw documents to a local Pickle file for BM25 hybrid search."""
-        bm25_path = self._get_bm25_path()
-        try:
-            existing_documents = []
-            existing_ids = set()
+        """Persists the raw documents to a local Pickle file for RAM-based BM25 search."""
+        if not os.path.exists(settings.bm25_dir):
+            os.makedirs(settings.bm25_dir)
 
+        bm25_path = os.path.join(settings.bm25_dir, f"{self.collection_name}_bm25.pkl")
+        existing_documents = []
+
+        try:
             # 1. Load existing corpus to prevent complete overwrite
             if os.path.exists(bm25_path):
                 with open(bm25_path, "rb") as f:
                     existing_documents = pickle.load(f)
-                    # Track existing chunk_ids to avoid duplicating the same file
-                    existing_ids = {
-                        doc.metadata.get("chunk_id")
-                        for doc in existing_documents
-                        if doc.metadata.get("chunk_id")
-                    }
 
-            # 2. Filter for strictly NEW documents
+            # 2. Track existing chunk_ids to avoid duplicating the same file
+            existing_ids = {doc.metadata.get("chunk_id") for doc in existing_documents}
             new_documents = [
                 doc
                 for doc in documents
@@ -202,7 +171,9 @@ class PolicyVectorStore:
             ]
 
             if not new_documents:
-                logging.info(f"No new documents to add to BM25 corpus at: {bm25_path}")
+                logging.info(
+                    f"No new documents to add for BM25 collection: {self.collection_name}"
+                )
                 return
 
             # 3. Append and save
@@ -211,10 +182,63 @@ class PolicyVectorStore:
                 pickle.dump(existing_documents, f)
 
             logging.info(
-                f"Lexical corpus persisted! Added {len(new_documents)} new documents for local BM25 search at: {bm25_path}"
+                f"Lexical corpus persisted! Added {len(new_documents)} new documents."
             )
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")
+
+    async def _a_upsert_to_bm25(self, documents: List[Document]):
+        """Pickle is synchronous disk I/O, safely threaded and globally locked."""
+        async with self._bm25_io_lock:
+            await asyncio.to_thread(self._upsert_to_bm25, documents)
+
+    async def _a_upsert_to_upstash(self, documents: List[Document]):
+        """
+        Asynchronously creates a RediSearch index (if missing) and batch uploads
+        documents to Upstash Redis for serverless BM25 execution.
+        """
+        import redis.asyncio as redis
+        from redis.commands.search.field import TextField, TagField
+        from redis.commands.search.indexDefinition import IndexDefinition, IndexType
+
+        if not settings.upstash_redis_url:
+            raise ValueError("UPSTASH_REDIS_URL is not configured.")
+
+        redis_client = redis.from_url(settings.upstash_redis_url, decode_responses=True)
+        index_name = f"idx:{self.collection_name}"
+        prefix = f"doc:{self.collection_name}:"
+
+        # 1. Ensure RediSearch Index Exists
+        try:
+            await redis_client.ft(index_name).info()
+        except Exception:
+            logging.info(f"Creating new RediSearch index: {index_name}")
+            schema = (TextField("text"), TagField("chunk_id"), TextField("section"))
+            definition = IndexDefinition(prefix=[prefix], index_type=IndexType.HASH)
+            await redis_client.ft(index_name).create_index(
+                schema, definition=definition
+            )
+
+        # 2. Batch Upload via Pipeline (HSET inherently handles idempotent overwrites)
+        pipeline = redis_client.pipeline(transaction=False)
+        for doc in documents:
+            chunk_id = doc.metadata.get("chunk_id")
+            doc_key = f"{prefix}{chunk_id}"
+
+            mapping = {
+                "text": doc.page_content,
+                "chunk_id": chunk_id,
+                "page_start": str(doc.metadata.get("page_start", "")),
+                "page_end": str(doc.metadata.get("page_end", "")),
+                "section": str(doc.metadata.get("section", "")),
+            }
+            pipeline.hset(doc_key, mapping=mapping)
+
+        await pipeline.execute()
+        await redis_client.aclose()
+        logging.info(
+            f"Lexical corpus persisted! {len(documents)} chunks upserted to Upstash Redis."
+        )
 
     async def a_index_chunks(self, chunks, batch_size: int = 100):
         """Async orchestrator for the dual-indexing process."""
@@ -235,17 +259,14 @@ class PolicyVectorStore:
             # this safely by routing aadd_documents to a background ThreadPoolExecutor.
             await self._a_upsert_to_vector_db(documents, ids, batch_size)
 
-        # 2. Handle BM25 Persistence (Always run, relies on internal deduplication)
-        await self._a_upsert_to_bm25(documents)
+        # 2. Route Lexical DB Ingestion
+        if settings.lexical_db_type == "upstash":
+            await self._a_upsert_to_upstash(documents)
+        else:
+            await self._a_upsert_to_bm25(documents)
 
         logging.info("Async Indexing complete!")
 
     def get_retriever(self, k: int = 4):
-        """
-        Returns a standard LangChain retriever interface.
-        Note: This is used for pure semantic retrieval.
-        For Hybrid search, the RAGEngine will build a custom search engine.
-        """
-        return self.vector_store.as_retriever(
-            search_type="similarity", search_kwargs={"k": k}
-        )
+        """Returns a standard LangChain retriever interface for pure semantic search."""
+        return self.vector_store.as_retriever(search_kwargs={"k": k})

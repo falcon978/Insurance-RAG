@@ -4,32 +4,22 @@ engine.py
 The central orchestrator for the Insurance RAG pipeline.
 
 Responsibilities:
-1. Manages provider-agnostic Vector DB connections (Chroma or Pinecone).
-2. Maintains efficient BM25 index caching.
-3. Manages Cross-Encoder reranking using concatenated contextual strings.
+1. Orchestrates the retrieval and generation workflow.
+2. Delegates database initialization to dedicated factories.
+3. Executes Cross-Encoder reranking using concatenated contextual strings.
 4. Handles unified single-pass adjudication and conversational state memory.
 """
 
 import asyncio
-import os
-import pickle
 import logging
 from typing import List, Optional
 
-from langchain_chroma import Chroma
-
-try:
-    from langchain_pinecone import PineconeVectorStore
-except ImportError:
-    PineconeVectorStore = None
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.retrievers import BM25Retriever
-from langchain_core.documents import Document
 
 # Internal Module Imports
 from config import settings
+from rag.factories import VectorStoreFactory, LexicalStoreFactory
 from rag.retriever import DocumentSearch
 from rag.rerankers import ContextReranker
 from rag.generator import ResponseGenerator
@@ -39,63 +29,44 @@ logger = logging.getLogger(__name__)
 
 
 class InsuranceRAGEngine:
+    """
+    Orchestrates the Retrieval-Augmented Generation pipeline.
+    Initializes shared models and delegates data fetching to the retrieval layer.
+    """
+
     def __init__(self, gemini_api_key: str):
         """
-        Initializes the retrieval and generation engine with shared models,
-        a localized BM25 cache, and the structured query translation chain.
+        Initializes the retrieval and generation engine with shared models
+        and the structured query translation chain.
         """
         logger.info(
-            f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()})"
+            f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()} | Lexical: {settings.lexical_db_type.upper()})"
         )
 
         # 1. Initialize Shared Models Dynamically
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.embed_model_name,
             model_kwargs={"device": settings.hf_device},
-            encode_kwargs={"normalize_embeddings": True},
+            encode_kwargs={
+                "normalize_embeddings": True
+            },  # Enforces L2 Normalization for dot-product compatibility
         )
         self.reranker = ContextReranker(
-            model_name=settings.rerank_model_name,
-            device=settings.hf_device,
+            model_name=settings.rerank_model_name, device=settings.hf_device
         )
         self.generator = ResponseGenerator(
-            api_key=gemini_api_key,
-            model_name=settings.llm_model_name,
+            api_key=gemini_api_key, model_name=settings.llm_model_name
         )
 
+        # 2. Initialize the Structured Output Translation Layer
         planner_llm = ChatGoogleGenerativeAI(
             model=settings.planner_model_name,
             temperature=settings.planner_temperature,
             api_key=gemini_api_key,
         )
 
-        # 2. Initialize the Structured Output Translation Layer
+        # 3. Initialize the Structured Output Translation Layer
         self.rewriter_chain = get_structured_rewriter_chain(planner_llm)
-
-        # 3. Initialize Local Caching
-        self._bm25_cache = {}
-
-    def _load_bm25_retriever(self, collection_name: str) -> Optional[BM25Retriever]:
-        """Loads the local text corpus for the BM25 lexical search branch."""
-        if collection_name in self._bm25_cache:
-            return self._bm25_cache[collection_name]
-
-        corpus_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
-        if not os.path.exists(corpus_path):
-            logger.warning(
-                f"BM25 index not found at {corpus_path}. Lexical search disabled."
-            )
-            return None
-
-        try:
-            with open(corpus_path, "rb") as f:
-                docs = pickle.load(f)
-            retriever = BM25Retriever.from_documents(docs)
-            self._bm25_cache[collection_name] = retriever
-            return retriever
-        except Exception as e:
-            logger.error(f"Failed to initialize BM25 index: {e}")
-            return None
 
     def _get_search_engine(
         self,
@@ -104,25 +75,20 @@ class InsuranceRAGEngine:
         semantic_weight: float = 0.5,
         lexical_weight: float = 0.5,
     ) -> DocumentSearch:
-        """Connects to Chroma or Pinecone and attaches the BM25 local index."""
-        if settings.vector_db_type == "pinecone":
-            if not PineconeVectorStore:
-                raise ImportError("pinecone-client is not installed.")
-            vector_store = PineconeVectorStore(
-                index_name=settings.pinecone_index_name,
-                embedding=self.embeddings,
-                namespace=collection_name,
-                pinecone_api_key=settings.pinecone_api_key,
-            )
-        else:
-            vector_store = Chroma(
-                collection_name=collection_name,
-                embedding_function=self.embeddings,
-                persist_directory=settings.chroma_dir,
-            )
+        """
+        Utilizes factories to instantiate the required databases and wraps them in the Orchestrator.
+        """
+        # 1. Delegate Vector Database creation to the Factory
+        vector_store = VectorStoreFactory.get_vector_store(
+            collection_name=collection_name, embeddings=self.embeddings
+        )
 
-        bm25_retriever = self._load_bm25_retriever(collection_name)
+        # 2. Delegate Lexical Database creation to the Factory
+        bm25_retriever = LexicalStoreFactory.get_lexical_retriever(
+            collection_name=collection_name, top_k=retrieve_top_k
+        )
 
+        # 3. Return the Orchestrator
         return DocumentSearch(
             vector_store=vector_store,
             bm25_retriever=bm25_retriever,
@@ -133,7 +99,8 @@ class InsuranceRAGEngine:
 
     def _format_policy_name(self, collection_name: str) -> str:
         """Cleans and formats raw collection names for UI presentation."""
-        return collection_name.replace("insurance_", "").replace("_", " ").title()
+        name = collection_name.replace("insurance_", "").replace("_", " ").title()
+        return name
 
     async def a_query_single_policy(
         self,
@@ -143,9 +110,7 @@ class InsuranceRAGEngine:
         max_history_len: int = 6,
         **kwargs,
     ) -> str:
-        """
-        Orchestrates the retrieval and generation pipeline for a single policy.
-        """
+        """Orchestrates the retrieval and generation pipeline for a single policy."""
         active_history = history[-max_history_len:] if history else []
         ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
         rerank_k = kwargs.get("rerank_top_k", settings.default_rerank_top_k)
@@ -202,9 +167,7 @@ class InsuranceRAGEngine:
         max_history_len: int = 4,
         **kwargs,
     ) -> str:
-        """
-        Orchestrates the independent comparative retrieval and generation pipeline.
-        """
+        """Orchestrates the independent comparative retrieval and generation pipeline."""
         active_history = history[-max_history_len:] if history else []
         ret_k = kwargs.get("retrieve_top_k", settings.default_retrieve_top_k)
         rerank_k = kwargs.get("rerank_top_k", settings.default_rerank_top_k)
@@ -246,8 +209,12 @@ class InsuranceRAGEngine:
 
         # Delegates CPU-bound reranking tasks to background threads concurrently
         best_a, best_b = await asyncio.gather(
-            self.reranker.a_rerank(combined_rerank_string, fused_a, top_k=rerank_k),
-            self.reranker.a_rerank(combined_rerank_string, fused_b, top_k=rerank_k),
+            self.reranker.a_rerank(
+                query=combined_rerank_string, documents=fused_a, top_k=rerank_k
+            ),
+            self.reranker.a_rerank(
+                query=combined_rerank_string, documents=fused_b, top_k=rerank_k
+            ),
         )
 
         # 5. Unified Single-Pass Comparative Generation

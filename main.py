@@ -9,9 +9,8 @@ import logging
 import sys
 import shutil
 import tempfile
-import urllib.request
+import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from typing import List
 
 from config import settings
 from engine import InsuranceRAGEngine
@@ -24,7 +23,7 @@ from schemas import (
     StandardResponse,
 )
 
-#  Set up a basic console handler so logs actually have a place to print
+# Set up a basic console handler for observability
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -37,6 +36,7 @@ app = FastAPI(title="Insurance RAG API")
 
 # Initialize the Engine using central settings
 rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+
 
 # --- QUERY ENDPOINTS ---
 
@@ -53,7 +53,7 @@ async def query_single(req: SingleQueryRequest):
         )
         return StandardResponse(
             status="success",
-            message="Query processed successfully.",
+            message="Query processed",
             data={"markdown_report": answer},
         )
     except Exception as e:
@@ -74,7 +74,7 @@ async def query_compare(req: CompareQueryRequest):
         )
         return StandardResponse(
             status="success",
-            message="Comparison processed successfully.",
+            message="Comparison processed",
             data={"markdown_report": answer},
         )
     except Exception as e:
@@ -85,55 +85,29 @@ async def query_compare(req: CompareQueryRequest):
 # --- ADMIN ENDPOINTS ---
 
 
-@app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
-async def list_collections():
+@app.post("/api/v1/admin/ingest/file")
+async def ingest_file(file: UploadFile = File(...), collection_name: str = Form(...)):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    tmp_path = ""
     try:
-        if settings.vector_db_type == "pinecone":
-            import pinecone
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
 
-            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
-            index = pc.Index(settings.pinecone_index_name)
-            # Pinecone namespaces act as our collections
-            stats = index.describe_index_stats()
-            collections = list(stats["namespaces"].keys())
-        else:
-            import chromadb
-
-            client = chromadb.PersistentClient(path=settings.chroma_dir)
-            collections = [c.name for c in client.list_collections()]
-
-        return CollectionListResponse(collections=collections)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch collections: {str(e)}"
-        )
-
-
-@app.delete("/api/v1/admin/collections/{collection_name}")
-async def delete_collection(collection_name: str):
-    try:
-        if settings.vector_db_type == "pinecone":
-            import pinecone
-
-            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
-            idx = pc.Index(settings.pinecone_index_name)
-            idx.delete(delete_all=True, namespace=collection_name)
-        else:
-            import chromadb
-
-            client = chromadb.PersistentClient(path=settings.chroma_dir)
-            client.delete_collection(collection_name)
-
-        # Also clean up the local BM25 pickle from the new dedicated directory
-        bm25_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
-        if os.path.exists(bm25_path):
-            os.remove(bm25_path)  # Uses os.remove because it is a file, not a directory
+        await ExtractionPipeline(
+            pdf_path=tmp_path, collection_name=collection_name
+        ).a_run()
 
         return StandardResponse(
-            status="success", message=f"Collection {collection_name} deleted"
+            status="success", message=f"Successfully indexed {file.filename}"
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 @app.post("/api/v1/admin/ingest/url")
@@ -160,7 +134,7 @@ async def ingest_url(req: UrlIngestRequest):
             except httpx.HTTPStatusError as exc:
                 raise HTTPException(
                     status_code=exc.response.status_code,
-                    detail=f"Error response {exc.response.status_code} while requesting {exc.request.url}.",
+                    detail=f"Error response {exc.response.status_code}.",
                 )
 
         # 2. Write the retrieved bytes to a temporary file
@@ -172,10 +146,74 @@ async def ingest_url(req: UrlIngestRequest):
         await ExtractionPipeline(
             pdf_path=tmp_path, collection_name=req.collection_name
         ).a_run()
-
         return StandardResponse(status="success", message="URL indexed successfully.")
-
     finally:
         # 4. Ensure cleanup occurs regardless of pipeline success/failure
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+@app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
+def list_collections():
+    try:
+        collections = []
+        if settings.vector_db_type == "pinecone":
+            import pinecone
+
+            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
+            idx = pc.Index(settings.pinecone_index_name)
+            stats = idx.describe_index_stats()
+            collections = list(stats.namespaces.keys())
+        else:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=settings.chroma_dir)
+            collections = [col.name for col in client.list_collections()]
+        return CollectionListResponse(collections=collections)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/admin/collections/{collection_name}")
+async def delete_collection(collection_name: str):
+    try:
+        # 1. Drop Vector DB Namespace
+        if settings.vector_db_type == "pinecone":
+            import pinecone
+
+            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
+            idx = pc.Index(settings.pinecone_index_name)
+            idx.delete(delete_all=True, namespace=collection_name)
+        else:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=settings.chroma_dir)
+            client.delete_collection(collection_name)
+
+        # 2. Drop Lexical DB Index
+        if settings.lexical_db_type == "upstash":
+            import redis.asyncio as redis
+
+            if settings.upstash_redis_url:
+                redis_client = redis.from_url(settings.upstash_redis_url)
+                try:
+                    # 'DD' drops the index AND deletes all underlying hash documents
+                    await redis_client.ft(f"idx:{collection_name}").dropindex(
+                        delete_documents=True
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to drop RediSearch index (may not exist): {e}"
+                    )
+                finally:
+                    await redis_client.aclose()
+        else:
+            bm25_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
+            if os.path.exists(bm25_path):
+                os.remove(bm25_path)
+
+        return StandardResponse(
+            status="success", message=f"Collection {collection_name} deleted"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
