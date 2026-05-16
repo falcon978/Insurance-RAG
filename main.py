@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.responses import RedirectResponse
 
 from config import settings
 from engine import InsuranceRAGEngine
@@ -34,6 +35,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Insurance RAG API")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirects the root URL to the interactive Swagger UI."""
+    return RedirectResponse(url="/docs")
+
 
 # Initialize the Engine using central settings
 rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
