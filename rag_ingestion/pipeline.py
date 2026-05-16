@@ -43,8 +43,8 @@ class ExtractionPipeline:
         self,
         pdf_path: str,
         collection_name: str = "insurance_policies",
-        chunk_size: int = 1200,
-        chunk_overlap: int = 150,
+        chunk_size: int = settings.default_chunk_size,
+        chunk_overlap: int = settings.default_chunk_overlap,
         device: str = settings.hf_device,  # Pulls from config
         verbose: bool = True,
     ):

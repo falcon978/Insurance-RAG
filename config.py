@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     default_semantic_weight: float = float(os.getenv("DEFAULT_SEMANTIC_WEIGHT", 0.5))
     default_lexical_weight: float = float(os.getenv("DEFAULT_LEXICAL_WEIGHT", 0.5))
 
+    # Default Ingestion Hyperparameters
+    default_chunk_size: int = int(os.getenv("CHUNK_SIZE", 2200))
+    default_chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 400))
+
     # LLM and Device Config
     admin_password: str = os.getenv("ADMIN_PASSWORD", "admin123")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY")

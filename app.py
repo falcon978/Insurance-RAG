@@ -227,6 +227,35 @@ with tab_admin:
             "Source Type", ["File Upload", "Web URL"], horizontal=True
         )
 
+        # Input placements
+        if ingest_method == "File Upload":
+            st.file_uploader("Upload PDF Policy", type=["pdf"], key="file_uploader")
+        else:
+            st.text_input("Direct PDF URL", key="url_input")
+
+        # --- NEW: Advanced Chunking Settings UI ---
+        with st.expander("⚙️ Advanced Chunking Settings"):
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                # Using pre-filled values based on typical defaults
+                input_chunk_size = st.number_input(
+                    "Chunk Size",
+                    min_value=500,
+                    max_value=5000,
+                    value=2200,
+                    step=100,
+                    help="Target characters per chunk.",
+                )
+            with col_c2:
+                input_chunk_overlap = st.number_input(
+                    "Chunk Overlap",
+                    min_value=0,
+                    max_value=1000,
+                    value=400,
+                    step=50,
+                    help="Overlapping characters to maintain context between chunks.",
+                )
+
         if st.button("Process & Index Document", type="primary", disabled=not doc_key):
             # Enforce naming convention
             target_col = (
@@ -248,7 +277,12 @@ with tab_admin:
                                 "application/pdf",
                             )
                         }
-                        data = {"collection_name": target_col}
+                        # Add chunking params to the form data payload
+                        data = {
+                            "collection_name": target_col,
+                            "chunk_size": input_chunk_size,
+                            "chunk_overlap": input_chunk_overlap,
+                        }
                         res = requests.post(
                             f"{API_BASE_URL}/api/v1/admin/ingest/file",
                             files=files,
@@ -260,7 +294,13 @@ with tab_admin:
                             st.error("Please enter a URL.")
                             st.stop()
 
-                        payload = {"url": url_val, "collection_name": target_col}
+                        # Add chunking params to the JSON payload
+                        payload = {
+                            "url": url_val,
+                            "collection_name": target_col,
+                            "chunk_size": input_chunk_size,
+                            "chunk_overlap": input_chunk_overlap,
+                        }
                         res = requests.post(
                             f"{API_BASE_URL}/api/v1/admin/ingest/url", json=payload
                         )
@@ -271,9 +311,3 @@ with tab_admin:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Ingestion failed: {e}")
-
-        # Input placements
-        if ingest_method == "File Upload":
-            st.file_uploader("Upload PDF Policy", type=["pdf"], key="file_uploader")
-        else:
-            st.text_input("Direct PDF URL", key="url_input")

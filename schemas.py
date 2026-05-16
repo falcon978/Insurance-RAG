@@ -6,6 +6,7 @@ Pydantic schemas for FastAPI request and response validation.
 
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict
+from config import settings
 
 
 class SingleQueryRequest(BaseModel):
@@ -29,6 +30,8 @@ class CompareQueryRequest(BaseModel):
 class UrlIngestRequest(BaseModel):
     url: HttpUrl
     collection_name: str
+    chunk_size: int = settings.default_chunk_size
+    chunk_overlap: int = settings.default_chunk_overlap
 
 
 class CollectionListResponse(BaseModel):

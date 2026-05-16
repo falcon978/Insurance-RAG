@@ -11,7 +11,7 @@ import shutil
 import tempfile
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse  # Added for Swagger redirect
 
 from config import settings
 from engine import InsuranceRAGEngine
@@ -36,15 +36,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Insurance RAG API")
 
+# Initialize the Engine using central settings
+rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+
 
 @app.get("/", include_in_schema=False)
 async def root():
     """Redirects the root URL to the interactive Swagger UI."""
     return RedirectResponse(url="/docs")
-
-
-# Initialize the Engine using central settings
-rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
 
 
 # --- HELPER FUNCTION ---
@@ -105,7 +104,12 @@ async def query_compare(req: CompareQueryRequest):
 
 
 @app.post("/api/v1/admin/ingest/file")
-async def ingest_file(file: UploadFile = File(...), collection_name: str = Form(...)):
+async def ingest_file(
+    file: UploadFile = File(...),
+    collection_name: str = Form(...),
+    chunk_size: int = Form(settings.default_chunk_size),
+    chunk_overlap: int = Form(settings.default_chunk_overlap),
+):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
@@ -123,7 +127,10 @@ async def ingest_file(file: UploadFile = File(...), collection_name: str = Form(
             tmp_path = tmp.name
 
         await ExtractionPipeline(
-            pdf_path=tmp_path, collection_name=collection_name
+            pdf_path=tmp_path,
+            collection_name=collection_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         ).a_run()
 
         return StandardResponse(
@@ -176,8 +183,12 @@ async def ingest_url(req: UrlIngestRequest):
 
         # 3. Execute the asynchronous extraction pipeline
         await ExtractionPipeline(
-            pdf_path=tmp_path, collection_name=req.collection_name
+            pdf_path=tmp_path,
+            collection_name=req.collection_name,
+            chunk_size=req.chunk_size,
+            chunk_overlap=req.chunk_overlap,
         ).a_run()
+
         return StandardResponse(status="success", message="URL indexed successfully.")
     finally:
         # 4. Ensure cleanup occurs regardless of pipeline success/failure
