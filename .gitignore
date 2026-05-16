@@ -209,3 +209,12 @@ __marimo__/
 
 # Eval Dataset Folders
 /golden_dataset
+
+# --- RAG Local Data & Caches ---
+chroma_data/
+bm25_cache/
+*.pkl
+*.sqlite3
+
+# --- Evaluation Results ---
+eval_results/
