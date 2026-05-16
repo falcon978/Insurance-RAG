@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # Lexical DB Config
     lexical_db_type: Literal["ram", "upstash"] = os.getenv("LEXICAL_DB_TYPE", "ram")
     bm25_dir: str = "./bm25_cache"
-    upstash_redis_url: str = os.getenv("UPSTASH_REDIS_URL", "")
+    upstash_redis_url: str = os.getenv("UPSTASH_REDIS_URL")
 
     # MODEL CONFIGURATION
     embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")

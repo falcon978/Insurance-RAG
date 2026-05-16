@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from config import settings
 from engine import InsuranceRAGEngine
 from rag_ingestion.pipeline import ExtractionPipeline
+from rag_ingestion.indexer import PolicyVectorStore
 from schemas import (
     SingleQueryRequest,
     CompareQueryRequest,
@@ -36,6 +37,16 @@ app = FastAPI(title="Insurance RAG API")
 
 # Initialize the Engine using central settings
 rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+
+
+# --- HELPER FUNCTION ---
+async def check_if_already_indexed(collection_name: str) -> bool:
+    """
+    Instantiates the VectorStore to run a lightning-fast, zero-cost
+    database check before wasting CPU on PDF parsing.
+    """
+    store = PolicyVectorStore(collection_name=collection_name)
+    return await store._a_is_namespace_populated()
 
 
 # --- QUERY ENDPOINTS ---
@@ -90,6 +101,13 @@ async def ingest_file(file: UploadFile = File(...), collection_name: str = Form(
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
+    # EARLY EXIT: Prevent wasteful disk write and CPU chunking
+    if await check_if_already_indexed(collection_name):
+        return StandardResponse(
+            status="success",
+            message=f"Skipped: Collection '{collection_name}' is already indexed.",
+        )
+
     tmp_path = ""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -112,9 +130,15 @@ async def ingest_file(file: UploadFile = File(...), collection_name: str = Form(
 
 @app.post("/api/v1/admin/ingest/url")
 async def ingest_url(req: UrlIngestRequest):
-    """
-    Downloads and indexes a PDF from a provided URL using non-blocking network I/O.
-    """
+    """Downloads and indexes a PDF from a provided URL using non-blocking network I/O."""
+
+    # EARLY EXIT: Prevent wasteful network download and CPU chunking
+    if await check_if_already_indexed(req.collection_name):
+        return StandardResponse(
+            status="success",
+            message=f"Skipped: Collection '{req.collection_name}' is already indexed.",
+        )
+
     tmp_path = ""
     try:
         # 1. Execute non-blocking network request
