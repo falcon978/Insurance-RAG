@@ -27,3 +27,8 @@ notebooks/
 
 # Evaluation Data
 eval_results/
+
+# Evaluation Framework & Datasets
+evaluations/
+eval_dashboard..py
+golden_dataset.json
