@@ -234,11 +234,11 @@ async def delete_collection(collection_name: str):
             client.delete_collection(collection_name)
 
         # 2. Drop Lexical DB Index
-        if settings.lexical_db_type == "upstash":
+        if settings.lexical_db_type == "redis":
             import redis.asyncio as redis
 
-            if settings.upstash_redis_url:
-                redis_client = redis.from_url(settings.upstash_redis_url)
+            if settings.redis_url:
+                redis_client = redis.from_url(settings.redis_url)
                 try:
                     # 'DD' drops the index AND deletes all underlying hash documents
                     await redis_client.ft(f"idx:{collection_name}").dropindex(

@@ -192,7 +192,7 @@ class PolicyVectorStore:
         async with self._bm25_io_lock:
             await asyncio.to_thread(self._upsert_to_bm25, documents)
 
-    async def _a_upsert_to_upstash(self, documents: List[Document]):
+    async def _a_upsert_to_redis(self, documents: List[Document]):
         """
         Asynchronously creates a RediSearch index (if missing) and batch uploads
         documents to Upstash Redis for serverless BM25 execution.
@@ -201,10 +201,10 @@ class PolicyVectorStore:
         from redis.commands.search.field import TextField, TagField
         from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
-        if not settings.upstash_redis_url:
-            raise ValueError("UPSTASH_REDIS_URL is not configured.")
+        if not settings.redis_url:
+            raise ValueError("REDIS_URL is not configured.")
 
-        redis_client = redis.from_url(settings.upstash_redis_url, decode_responses=True)
+        redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         index_name = f"idx:{self.collection_name}"
         prefix = f"doc:{self.collection_name}:"
 
@@ -260,8 +260,8 @@ class PolicyVectorStore:
             await self._a_upsert_to_vector_db(documents, ids, batch_size)
 
         # 2. Route Lexical DB Ingestion
-        if settings.lexical_db_type == "upstash":
-            await self._a_upsert_to_upstash(documents)
+        if settings.lexical_db_type == "redis":
+            await self._a_upsert_to_redis(documents)
         else:
             await self._a_upsert_to_bm25(documents)
 

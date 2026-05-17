@@ -3,7 +3,7 @@ config.py
 ---------
 Centralized configuration management using Pydantic Settings.
 Toggles between 'chroma'/'pinecone' for dense vector storage and
-'ram'/'upstash' for lexical BM25 search caching/execution.
+'ram'/'redis' for lexical BM25 search caching/execution.
 """
 
 import os
@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME")
 
     # Lexical DB Config
-    lexical_db_type: Literal["ram", "upstash"] = os.getenv("LEXICAL_DB_TYPE", "ram")
+    lexical_db_type: Literal["ram", "redis"] = os.getenv("LEXICAL_DB_TYPE", "ram")
     bm25_dir: str = "./bm25_cache"
-    upstash_redis_url: str = os.getenv("UPSTASH_REDIS_URL")
+    redis_url: str = os.getenv("REDIS_URL")
 
     # MODEL CONFIGURATION
     embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")

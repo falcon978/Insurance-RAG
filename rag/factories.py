@@ -60,10 +60,10 @@ class LexicalStoreFactory:
 
     @staticmethod
     def get_lexical_retriever(collection_name: str, top_k: int):
-        if settings.lexical_db_type == "upstash":
+        if settings.lexical_db_type == "redis":
             logger.info(f"Connecting to Upstash RediSearch index: {collection_name}")
             return UpstashRediSearchRetriever(
-                redis_url=settings.upstash_redis_url,
+                redis_url=settings.redis_url,
                 collection_name=collection_name,
                 k=top_k,
             )
