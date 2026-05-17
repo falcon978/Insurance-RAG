@@ -110,20 +110,20 @@ class DocumentSearch:
         """
         Executes the Asymmetric Ensemble Retrieval Pipeline asynchronously and manually calculates the
         Reciprocal Rank Fusion (RRF) scores to combine the contexts.
+        Vector queries run sequentially to prevent Pinecone connection timeouts,
+        while the Lexical query runs concurrently in the background.
         """
-        tasks = [
-            self.vector_retriever.ainvoke(original_query),
-            self.vector_retriever.ainvoke(vector_string),
-        ]
-
+        # 1. Fire the Redis BM25 query concurrently in the background
+        bm25_task = None
         if self.bm25_retriever:
-            tasks.append(self.bm25_retriever.ainvoke(bm25_string))
+            bm25_task = asyncio.create_task(self.bm25_retriever.ainvoke(bm25_string))
 
-        results = await asyncio.gather(*tasks)
+        # 2. Execute Pinecone vector queries sequentially to avoid aiohttp socket collisions
+        docs_vec_orig = await self.vector_retriever.ainvoke(original_query)
+        docs_vec_legal = await self.vector_retriever.ainvoke(vector_string)
 
-        docs_vec_orig = results[0]
-        docs_vec_legal = results[1]
-        docs_bm25 = results[2] if self.bm25_retriever else []
+        # 3. Await the Redis results
+        docs_bm25 = await bm25_task if bm25_task else []
 
         # Two-Stage Reciprocal Rank Fusion
         # Stage 1: Standard unweighted fusion of the two Semantic tracks
