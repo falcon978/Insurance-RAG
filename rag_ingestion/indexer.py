@@ -210,7 +210,7 @@ class PolicyVectorStore:
         documents to Upstash Redis for serverless BM25 execution.
         """
         from redis.commands.search.field import TextField, TagField
-        from redis.commands.search.index_definition import IndexDefinition
+        from redis.commands.search.index_definition import IndexDefinition, IndexType
 
         # 2. Assign the 'redis' alias LAST
         import redis.asyncio as redis
@@ -223,12 +223,12 @@ class PolicyVectorStore:
 
         # 1. Ensure RediSearch Index Exists
         try:
-            await redis_client.ft(index_name).info()
+            await self.redis_client.ft(index_name).info()
         except Exception:
             logging.info(f"Creating new RediSearch index: {index_name}")
             schema = (TextField("text"), TagField("chunk_id"), TextField("section"))
             definition = IndexDefinition(prefix=[prefix], index_type=IndexType.HASH)
-            await redis_client.ft(index_name).create_index(
+            await self.redis_client.ft(index_name).create_index(
                 schema, definition=definition
             )
 
