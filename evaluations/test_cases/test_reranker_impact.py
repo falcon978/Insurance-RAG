@@ -6,7 +6,10 @@ adds compared to raw vector search ranking.
 """
 
 import pytest
+import pytest_asyncio  # <-- ADDED for async fixtures
 import asyncio
+import redis.asyncio as redis
+from pinecone import Pinecone
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import ContextualPrecisionMetric
@@ -18,6 +21,33 @@ from evaluations.utils.custom_judge import get_eval_judge
 
 rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
+
+
+# --- CONNECTION POOL FIXTURE ---
+@pytest_asyncio.fixture(scope="module")
+async def rag_wrapper():
+    """Spins up a shared database connection pool for all tests in this file."""
+
+    # 1. Initialize Redis TCP Pool (allow slightly higher max_connections for async testing)
+    redis_client = redis.from_url(
+        eval_settings.redis_url,
+        decode_responses=True,
+        health_check_interval=30,
+        retry_on_timeout=True,
+        max_connections=50,
+    )
+
+    # 2. Initialize Pinecone HTTP Session
+    pc = Pinecone(api_key=eval_settings.pinecone_api_key)
+    pinecone_index = pc.Index(eval_settings.pinecone_index_name)
+
+    # 3. Inject into the wrapper
+    wrapper = EvalRAGWrapper(redis_client=redis_client, pinecone_index=pinecone_index)
+
+    yield wrapper
+
+    # 4. Graceful Teardown after all tests finish
+    await redis_client.aclose()
 
 
 @pytest.mark.asyncio

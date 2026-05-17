@@ -37,7 +37,13 @@ class PolicyVectorStore:
     # Class-level attribute to ensure a globally shared lock across all concurrent instances.
     _bm25_io_lock = None
 
-    def __init__(self, collection_name: str, device: str = "cpu"):
+    def __init__(
+        self,
+        collection_name: str,
+        device: str = "cpu",
+        redis_client=None,
+        pinecone_index=None,
+    ):
         """
         Initializes the embedding model and delegates Vector DB connection to the Factory.
         """
@@ -48,6 +54,10 @@ class PolicyVectorStore:
         self.collection_name = collection_name
         self.device = device
 
+        # Store clients for ingestion
+        self.redis_client = redis_client
+        self.pinecone_index = pinecone_index
+
         # 1. Initialize Shared Embedding Model Dynamically
         self.embeddings = HuggingFaceEmbeddings(
             model_name=settings.embed_model_name,
@@ -57,7 +67,9 @@ class PolicyVectorStore:
 
         # 2. Delegate Vector Database creation to the Factory
         self.vector_store = VectorStoreFactory.get_vector_store(
-            collection_name=self.collection_name, embeddings=self.embeddings
+            collection_name=self.collection_name,
+            embeddings=self.embeddings,
+            pinecone_index=self.pinecone_index,
         )
 
     def _prepare_documents(
@@ -201,10 +213,9 @@ class PolicyVectorStore:
         from redis.commands.search.field import TextField, TagField
         from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
-        if not settings.redis_url:
-            raise ValueError("REDIS_URL is not configured.")
+        if not self.redis_client:
+            raise ValueError("Redis client was not injected into the indexer.")
 
-        redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         index_name = f"idx:{self.collection_name}"
         prefix = f"doc:{self.collection_name}:"
 
@@ -235,7 +246,7 @@ class PolicyVectorStore:
             pipeline.hset(doc_key, mapping=mapping)
 
         await pipeline.execute()
-        await redis_client.aclose()
+
         logging.info(
             f"Lexical corpus persisted! {len(documents)} chunks upserted to Upstash Redis."
         )

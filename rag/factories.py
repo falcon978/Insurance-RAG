@@ -30,17 +30,16 @@ class VectorStoreFactory:
     """Factory for initializing Dense Vector Databases (Semantic Search)."""
 
     @staticmethod
-    def get_vector_store(collection_name: str, embeddings: Embeddings) -> VectorStore:
+    def get_vector_store(
+        collection_name: str, embeddings: Embeddings, pinecone_index=None
+    ) -> VectorStore:
         if settings.vector_db_type == "pinecone":
-            if not PineconeVectorStore or not settings.pinecone_api_key:
+            if not PineconeVectorStore or pinecone_index is None:
                 raise ValueError("Pinecone is not installed or the API key is missing.")
 
             logger.info(f"Connecting to Pinecone namespace: {collection_name}")
             return PineconeVectorStore(
-                index_name=settings.pinecone_index_name,
-                embedding=embeddings,
-                namespace=collection_name,
-                pinecone_api_key=settings.pinecone_api_key,
+                index=pinecone_index, embedding=embeddings, namespace=collection_name
             )
 
         elif settings.vector_db_type == "chroma":
@@ -59,11 +58,11 @@ class LexicalStoreFactory:
     """Factory for initializing Lexical Databases (Keyword/BM25 Search)."""
 
     @staticmethod
-    def get_lexical_retriever(collection_name: str, top_k: int):
+    def get_lexical_retriever(collection_name: str, top_k: int, redis_client=None):
         if settings.lexical_db_type == "redis":
             logger.info(f"Connecting to Upstash RediSearch index: {collection_name}")
             return UpstashRediSearchRetriever(
-                redis_url=settings.redis_url,
+                redis_client=redis_client,
                 collection_name=collection_name,
                 k=top_k,
             )

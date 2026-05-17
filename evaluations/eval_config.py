@@ -14,6 +14,12 @@ class EvalSettings(BaseSettings):
     # API Keys
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     confident_api_key: str = os.getenv("CONFIDENT_API_KEY", "")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")  # Added for the Engine
+
+    # Database Connections (Isolated for Evaluation)
+    redis_url: str = os.getenv("REDIS_CLOUD_URL", os.getenv("REDIS_URL", ""))
+    pinecone_api_key: str = os.getenv("PINECONE_API_KEY", "")
+    pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME", "")
 
     # Judge Model Configuration
     # Using Llama 3.3 70B as the default strong judge

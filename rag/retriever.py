@@ -26,10 +26,10 @@ class UpstashRediSearchRetriever:
     This offloads heavy tokenization and BM25 math from the Python server.
     """
 
-    def __init__(self, redis_url: str, collection_name: str, k: int = 15):
+    def __init__(self, redis_client, collection_name: str, k: int = 15):
         import redis.asyncio as redis
 
-        self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        self.redis_client = redis_client
         self.index_name = f"idx:{collection_name}"
         self.k = k
 
@@ -62,8 +62,6 @@ class UpstashRediSearchRetriever:
         except Exception as e:
             logger.error(f"Upstash RediSearch query failed: {e}")
             return []
-        finally:
-            await self.redis_client.aclose()
 
 
 class DocumentSearch:

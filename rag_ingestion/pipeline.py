@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import logging
 
-from config import settings  # Added centralized settings
+from config import settings
 from .models import PolicyChunk
 from .extractor import PDFExtractor
 from .cleaner import clean_markdown_layout
@@ -47,6 +47,8 @@ class ExtractionPipeline:
         chunk_overlap: int = settings.default_chunk_overlap,
         device: str = settings.hf_device,  # Pulls from config
         verbose: bool = True,
+        redis_client=None,  # INJECTED: Shared Redis connection pool
+        pinecone_index=None,  # INJECTED: Shared Pinecone HTTP session
     ):
         self.pdf_path = Path(pdf_path)
         self.collection_name = collection_name
@@ -54,6 +56,10 @@ class ExtractionPipeline:
         self.chunk_overlap = chunk_overlap
         self.device = device
         self.verbose = verbose
+
+        # Store injected connections
+        self.redis_client = redis_client
+        self.pinecone_index = pinecone_index
 
     def _log(self, msg: str):
         if self.verbose:
@@ -87,12 +93,14 @@ class ExtractionPipeline:
         self._log(f"           {len(chunks)} RAG chunks created")
 
         # ── Phase 3: Index ────────────────────────────────────────────
-        # Dynamically log the correct database type
         self._log(f"Phase 3/3 — Indexing into {settings.vector_db_type.upper()} …")
 
+        # Pass the pre-warmed connection pools down to the Vector Store
         store = PolicyVectorStore(
             collection_name=self.collection_name,
             device=self.device,
+            redis_client=self.redis_client,  # Propagated down
+            pinecone_index=self.pinecone_index,  # Propagated down
         )
 
         await store.a_index_chunks(chunks)
@@ -105,7 +113,7 @@ class ExtractionPipeline:
             "avg_chunk_chars": avg_chars,
             "avg_token_estimate": avg_chars // 4,
             "indexed_to_db": True,
-            "database_type": settings.vector_db_type,  # Reflects Pinecone or Chroma
+            "database_type": settings.vector_db_type,
             "elapsed_seconds": elapsed,
         }
 

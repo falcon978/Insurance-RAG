@@ -6,7 +6,11 @@ across the entire golden dataset.
 """
 
 import pytest
+import pytest_asyncio  # <-- ADDED for async fixtures
 import asyncio
+import redis.asyncio as redis
+from pinecone import Pinecone
+
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import (
@@ -25,8 +29,34 @@ from evaluations.metrics.insurance_metrics import (
 from evaluations.eval_config import eval_settings
 from evaluations.utils.custom_judge import get_eval_judge
 
-rag = EvalRAGWrapper()
 eval_judge = get_eval_judge()
+
+
+# --- CONNECTION POOL FIXTURE ---
+@pytest_asyncio.fixture(scope="module")
+async def rag_wrapper():
+    """Spins up a shared database connection pool for all tests in this file."""
+
+    # 1. Initialize Redis TCP Pool (allow slightly higher max_connections for async testing)
+    redis_client = redis.from_url(
+        eval_settings.redis_url,
+        decode_responses=True,
+        health_check_interval=30,
+        retry_on_timeout=True,
+        max_connections=50,
+    )
+
+    # 2. Initialize Pinecone HTTP Session
+    pc = Pinecone(api_key=eval_settings.pinecone_api_key)
+    pinecone_index = pc.Index(eval_settings.pinecone_index_name)
+
+    # 3. Inject into the wrapper
+    wrapper = EvalRAGWrapper(redis_client=redis_client, pinecone_index=pinecone_index)
+
+    yield wrapper
+
+    # 4. Graceful Teardown after all tests finish
+    await redis_client.aclose()
 
 
 @pytest.mark.asyncio
@@ -35,11 +65,18 @@ eval_judge = get_eval_judge()
     load_golden_dataset(),
 )
 async def test_full_rag_triad(
-    case_id, query, source, expected_snippets, keywords, reasoning
+    case_id,
+    query,
+    source,
+    expected_snippets,
+    keywords,
+    reasoning,
+    rag_wrapper,  # <-- INJECT FIXTURE HERE
 ):
     await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
 
-    actual_output, retrieved_contexts = await rag.a_query(
+    # Call a_query on the injected wrapper instance
+    actual_output, retrieved_contexts = await rag_wrapper.a_query(
         query=query,
         source=source,
         retrieve_top_k=eval_settings.retrieve_top_k,
@@ -85,5 +122,5 @@ async def test_full_rag_triad(
             correctness_metric,
             reasoning_metric,
         ],
-        run_async=False,
+        run_async=False,  # Let DeepEval handle its own internal async logic safely
     )

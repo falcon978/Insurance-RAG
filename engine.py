@@ -34,7 +34,7 @@ class InsuranceRAGEngine:
     Initializes shared models and delegates data fetching to the retrieval layer.
     """
 
-    def __init__(self, gemini_api_key: str):
+    def __init__(self, gemini_api_key: str, redis_client=None, pinecone_index=None):
         """
         Initializes the retrieval and generation engine with shared models
         and the structured query translation chain.
@@ -42,6 +42,10 @@ class InsuranceRAGEngine:
         logger.info(
             f"Booting RAG Engine (Vector Provider: {settings.vector_db_type.upper()} | Lexical: {settings.lexical_db_type.upper()})"
         )
+
+        # Store injected connections
+        self.redis_client = redis_client
+        self.pinecone_index = pinecone_index
 
         # 1. Initialize Shared Models Dynamically
         self.embeddings = HuggingFaceEmbeddings(
@@ -80,12 +84,16 @@ class InsuranceRAGEngine:
         """
         # 1. Delegate Vector Database creation to the Factory
         vector_store = VectorStoreFactory.get_vector_store(
-            collection_name=collection_name, embeddings=self.embeddings
+            collection_name=collection_name,
+            embeddings=self.embeddings,
+            pinecone_index=self.pinecone_index,
         )
 
         # 2. Delegate Lexical Database creation to the Factory
         bm25_retriever = LexicalStoreFactory.get_lexical_retriever(
-            collection_name=collection_name, top_k=retrieve_top_k
+            collection_name=collection_name,
+            top_k=retrieve_top_k,
+            redis_client=self.redis_client,
         )
 
         # 3. Return the Orchestrator

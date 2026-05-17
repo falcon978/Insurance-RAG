@@ -12,8 +12,12 @@ from config import settings
 
 
 class EvalRAGWrapper:
-    def __init__(self):
-        self.engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+    def __init__(self, redis_client=None, pinecone_index=None):
+        self.engine = self.engine = InsuranceRAGEngine(
+            gemini_api_key=settings.gemini_api_key,
+            redis_client=redis_client,
+            pinecone_index=pinecone_index,
+        )
 
     def _get_collection_name(self, source: str) -> str:
         """Safely maps the dataset source to your actual Chroma collections."""

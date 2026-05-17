@@ -10,8 +10,10 @@ import sys
 import shutil
 import tempfile
 import httpx
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import RedirectResponse  # Added for Swagger redirect
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
+from fastapi.responses import RedirectResponse
 
 from config import settings
 from engine import InsuranceRAGEngine
@@ -34,10 +36,58 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Insurance RAG API")
 
-# Initialize the Engine using central settings
-rag_engine = InsuranceRAGEngine(gemini_api_key=settings.gemini_api_key)
+# --- CONNECTION POOL LIFECYCLE ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import redis.asyncio as redis
+
+    logger.info("Initializing Database Connection Pools...")
+
+    # 1. Initialize Redis (TCP Pool)
+    app.state.redis = redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        health_check_interval=30,
+        retry_on_timeout=True,
+    )
+
+    # 2. Initialize Pinecone (HTTP Session Pool)
+    if settings.vector_db_type == "pinecone":
+        import pinecone
+
+        pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
+        app.state.pinecone_index = pc.Index(settings.pinecone_index_name)
+    else:
+        app.state.pinecone_index = None
+
+    yield  # App processes requests here
+
+    logger.info("Closing database connections...")
+    await app.state.redis.aclose()
+
+
+app = FastAPI(title="Insurance RAG API", lifespan=lifespan)
+
+
+# --- DEPENDENCY INJECTION ---
+async def get_redis(request: Request):
+    return request.app.state.redis
+
+
+async def get_pinecone_index(request: Request):
+    return request.app.state.pinecone_index
+
+
+# Inject connections into the RAG Engine dynamically per-request
+async def get_rag_engine(
+    redis_client=Depends(get_redis), pinecone_index=Depends(get_pinecone_index)
+):
+    return InsuranceRAGEngine(
+        gemini_api_key=settings.gemini_api_key,
+        redis_client=redis_client,
+        pinecone_index=pinecone_index,
+    )
 
 
 @app.get("/", include_in_schema=False)
@@ -47,12 +97,18 @@ async def root():
 
 
 # --- HELPER FUNCTION ---
-async def check_if_already_indexed(collection_name: str) -> bool:
+async def check_if_already_indexed(
+    collection_name: str, redis_client, pinecone_index
+) -> bool:
     """
     Instantiates the VectorStore to run a lightning-fast, zero-cost
     database check before wasting CPU on PDF parsing.
     """
-    store = PolicyVectorStore(collection_name=collection_name)
+    store = PolicyVectorStore(
+        collection_name=collection_name,
+        redis_client=redis_client,
+        pinecone_index=pinecone_index,
+    )
     return await store._a_is_namespace_populated()
 
 
@@ -60,7 +116,9 @@ async def check_if_already_indexed(collection_name: str) -> bool:
 
 
 @app.post("/api/v1/query/single", response_model=StandardResponse)
-async def query_single(req: SingleQueryRequest):
+async def query_single(
+    req: SingleQueryRequest, rag_engine: InsuranceRAGEngine = Depends(get_rag_engine)
+):
     try:
         answer = await rag_engine.a_query_single_policy(
             query=req.query,
@@ -80,7 +138,9 @@ async def query_single(req: SingleQueryRequest):
 
 
 @app.post("/api/v1/query/compare", response_model=StandardResponse)
-async def query_compare(req: CompareQueryRequest):
+async def query_compare(
+    req: CompareQueryRequest, rag_engine: InsuranceRAGEngine = Depends(get_rag_engine)
+):
     try:
         answer = await rag_engine.a_compare_policies(
             query=req.query,
@@ -109,12 +169,14 @@ async def ingest_file(
     collection_name: str = Form(...),
     chunk_size: int = Form(settings.default_chunk_size),
     chunk_overlap: int = Form(settings.default_chunk_overlap),
+    redis_client=Depends(get_redis),
+    pinecone_index=Depends(get_pinecone_index),
 ):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
     # EARLY EXIT: Prevent wasteful disk write and CPU chunking
-    if await check_if_already_indexed(collection_name):
+    if await check_if_already_indexed(collection_name, redis_client, pinecone_index):
         return StandardResponse(
             status="success",
             message=f"Skipped: Collection '{collection_name}' is already indexed.",
@@ -131,6 +193,8 @@ async def ingest_file(
             collection_name=collection_name,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            redis_client=redis_client,
+            pinecone_index=pinecone_index,
         ).a_run()
 
         return StandardResponse(
@@ -144,11 +208,17 @@ async def ingest_file(
 
 
 @app.post("/api/v1/admin/ingest/url")
-async def ingest_url(req: UrlIngestRequest):
+async def ingest_url(
+    req: UrlIngestRequest,
+    redis_client=Depends(get_redis),
+    pinecone_index=Depends(get_pinecone_index),
+):
     """Downloads and indexes a PDF from a provided URL using non-blocking network I/O."""
 
     # EARLY EXIT: Prevent wasteful network download and CPU chunking
-    if await check_if_already_indexed(req.collection_name):
+    if await check_if_already_indexed(
+        req.collection_name, redis_client, pinecone_index
+    ):
         return StandardResponse(
             status="success",
             message=f"Skipped: Collection '{req.collection_name}' is already indexed.",
@@ -166,14 +236,9 @@ async def ingest_url(req: UrlIngestRequest):
                     timeout=30.0,
                 )
                 response.raise_for_status()
-            except httpx.RequestError as exc:
+            except Exception as exc:
                 raise HTTPException(
-                    status_code=400, detail=f"Error requesting {exc.request.url}."
-                )
-            except httpx.HTTPStatusError as exc:
-                raise HTTPException(
-                    status_code=exc.response.status_code,
-                    detail=f"Error response {exc.response.status_code}.",
+                    status_code=400, detail=f"Error requesting URL: {exc}"
                 )
 
         # 2. Write the retrieved bytes to a temporary file
@@ -187,6 +252,8 @@ async def ingest_url(req: UrlIngestRequest):
             collection_name=req.collection_name,
             chunk_size=req.chunk_size,
             chunk_overlap=req.chunk_overlap,
+            redis_client=redis_client,
+            pinecone_index=pinecone_index,
         ).a_run()
 
         return StandardResponse(status="success", message="URL indexed successfully.")
@@ -197,15 +264,11 @@ async def ingest_url(req: UrlIngestRequest):
 
 
 @app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
-def list_collections():
+def list_collections(pinecone_index=Depends(get_pinecone_index)):
     try:
         collections = []
-        if settings.vector_db_type == "pinecone":
-            import pinecone
-
-            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
-            idx = pc.Index(settings.pinecone_index_name)
-            stats = idx.describe_index_stats()
+        if settings.vector_db_type == "pinecone" and pinecone_index is not None:
+            stats = pinecone_index.describe_index_stats()
             collections = list(stats.namespaces.keys())
         else:
             import chromadb
@@ -218,15 +281,15 @@ def list_collections():
 
 
 @app.delete("/api/v1/admin/collections/{collection_name}")
-async def delete_collection(collection_name: str):
+async def delete_collection(
+    collection_name: str,
+    redis_client=Depends(get_redis),
+    pinecone_index=Depends(get_pinecone_index),
+):
     try:
         # 1. Drop Vector DB Namespace
-        if settings.vector_db_type == "pinecone":
-            import pinecone
-
-            pc = pinecone.Pinecone(api_key=settings.pinecone_api_key)
-            idx = pc.Index(settings.pinecone_index_name)
-            idx.delete(delete_all=True, namespace=collection_name)
+        if settings.vector_db_type == "pinecone" and pinecone_index:
+            pinecone_index.delete(delete_all=True, namespace=collection_name)
         else:
             import chromadb
 
@@ -234,22 +297,14 @@ async def delete_collection(collection_name: str):
             client.delete_collection(collection_name)
 
         # 2. Drop Lexical DB Index
-        if settings.lexical_db_type == "redis":
-            import redis.asyncio as redis
-
-            if settings.redis_url:
-                redis_client = redis.from_url(settings.redis_url)
-                try:
-                    # 'DD' drops the index AND deletes all underlying hash documents
-                    await redis_client.ft(f"idx:{collection_name}").dropindex(
-                        delete_documents=True
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to drop RediSearch index (may not exist): {e}"
-                    )
-                finally:
-                    await redis_client.aclose()
+        if settings.lexical_db_type == "redis" and redis_client:
+            try:
+                # 'DD' drops the index AND deletes all underlying hash documents
+                await redis_client.ft(f"idx:{collection_name}").dropindex(
+                    delete_documents=True
+                )
+            except Exception as e:
+                logger.warning(f"Failed to drop RediSearch index (may not exist): {e}")
         else:
             bm25_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
             if os.path.exists(bm25_path):
