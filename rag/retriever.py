@@ -113,17 +113,23 @@ class DocumentSearch:
         Vector queries run sequentially to prevent Pinecone connection timeouts,
         while the Lexical query runs concurrently in the background.
         """
-        # 1. Fire the Redis BM25 query concurrently in the background
-        bm25_task = None
+        # 1. Prepare the background tasks
+        tasks = [
+            # Use to_thread + .invoke() instead of .ainvoke() for Pinecone
+            asyncio.to_thread(self.vector_retriever.invoke, original_query),
+            asyncio.to_thread(self.vector_retriever.invoke, vector_string),
+        ]
+
         if self.bm25_retriever:
-            bm25_task = asyncio.create_task(self.bm25_retriever.ainvoke(bm25_string))
+            # Redis natively supports async, so we can safely use ainvoke()
+            tasks.append(self.bm25_retriever.ainvoke(bm25_string))
 
-        # 2. Execute Pinecone vector queries sequentially to avoid aiohttp socket collisions
-        docs_vec_orig = await self.vector_retriever.ainvoke(original_query)
-        docs_vec_legal = await self.vector_retriever.ainvoke(vector_string)
+        # 2. Execute all 3 database queries concurrently
+        results = await asyncio.gather(*tasks)
 
-        # 3. Await the Redis results
-        docs_bm25 = await bm25_task if bm25_task else []
+        docs_vec_orig = results[0]
+        docs_vec_legal = results[1]
+        docs_bm25 = results[2] if self.bm25_retriever else []
 
         # Two-Stage Reciprocal Rank Fusion
         # Stage 1: Standard unweighted fusion of the two Semantic tracks
