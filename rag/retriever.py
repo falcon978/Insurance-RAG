@@ -13,6 +13,7 @@ from typing import List, Optional
 from langchain_core.vectorstores import VectorStore
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
+from langsmith import traceable
 
 from rag.utils import fuse_multi_query_results, fuse_weighted_results
 
@@ -33,6 +34,7 @@ class UpstashRediSearchRetriever:
         self.index_name = f"idx:{collection_name}"
         self.k = k
 
+    @traceable(run_type="retriever", name="Redis_BM25_Lexical")
     async def ainvoke(self, query: str) -> List[Document]:
         from redis.commands.search.query import Query
 
