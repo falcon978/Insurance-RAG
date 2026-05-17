@@ -210,7 +210,7 @@ class PolicyVectorStore:
         documents to Upstash Redis for serverless BM25 execution.
         """
         from redis.commands.search.field import TextField, TagField
-        from redis.commands.search.indexDefinition import IndexDefinition, IndexType
+        from redis.commands.search.index_definition import IndexDefinition
 
         # 2. Assign the 'redis' alias LAST
         import redis.asyncio as redis
