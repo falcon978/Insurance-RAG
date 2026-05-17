@@ -233,7 +233,7 @@ class PolicyVectorStore:
             )
 
         # 2. Batch Upload via Pipeline (HSET inherently handles idempotent overwrites)
-        pipeline = redis_client.pipeline(transaction=False)
+        pipeline = self.redis_client.pipeline(transaction=False)
         for doc in documents:
             chunk_id = doc.metadata.get("chunk_id")
             doc_key = f"{prefix}{chunk_id}"
