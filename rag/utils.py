@@ -152,7 +152,8 @@ def render_advisory_markdown(response_data: dict) -> str:
         md += f"### ⚠️ Risk Disclosure\n{response_data['risk_disclosure']}\n\n"
 
     if "follow_up_questions" in response_data and response_data["follow_up_questions"]:
-        md += "### ❓ Follow-up Questions\n"
+        md += "### 📋 Action Items for Insurer / Client\n"
+        md += "*To finalize this adjudication, please obtain the following:* \n"
         for q in response_data["follow_up_questions"]:
             md += f"- {q}\n"
         md += "\n"
