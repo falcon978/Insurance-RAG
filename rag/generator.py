@@ -13,7 +13,7 @@ from typing import List, Optional
 from langchain_core.documents import Document
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-from rag.utils import format_retrieved_context
+from rag.utils import format_retrieved_context, render_advisory_markdown
 from rag.generation_prompts import (
     single_policy_unified_template,
     compare_policies_unified_template,
@@ -55,23 +55,30 @@ class SentinelOutputParser(BaseOutputParser[dict]):
                 text,
                 re.DOTALL,
             )
-            advisory_report = report_match.group(1).strip() if report_match else None
+            advisory_str = report_match.group(1).strip() if report_match else None
 
-            if not advisory_report:
+            if not advisory_str:
                 logger.error(
                     f"Failed to find <<<BEGIN_ADVISORY_REPORT>>> sentinels.\nRaw Output: {text}"
                 )
                 advisory_report = "An error occurred while generating the advisory report. Please try again."
 
             # Clean up markdown formatting artifacts if the LLM adds them inside the tags
-            if advisory_report.startswith("```markdown"):
-                advisory_report = advisory_report[11:]
-            if advisory_report.endswith("```"):
-                advisory_report = advisory_report[:-3]
+            if advisory_str.startswith("```json"):
+                advisory_str = advisory_str[7:]
+            if advisory_str.endswith("```"):
+                advisory_str = advisory_str[:-3]
+
+            # Parse the string into a dictionary!
+            try:
+                advisory_dict = json.loads(advisory_str.strip())
+            except json.JSONDecodeError:
+                logger.error("Failed to parse Advisory JSON. Returning raw string.")
+                advisory_dict = {"executive_summary": advisory_str}  # Fallback
 
             return {
                 "adjudication": adjudicator_json,
-                "advisory_report": advisory_report.strip(),
+                "advisory_report": advisory_dict,
             }
 
         except Exception as e:
@@ -120,8 +127,11 @@ class ResponseGenerator:
             {"context": context_string, "query": query, "history": history or []}
         )
 
-        # Return just the Markdown report for the UI
-        return parsed_result["advisory_report"]
+        # Extract the report payload
+        report_payload = parsed_result.get("advisory_report", {})
+
+        # Route the dictionary through your new formatter!
+        return render_advisory_markdown(report_payload)
 
     async def a_generate_comparison(
         self,
@@ -153,5 +163,8 @@ class ResponseGenerator:
             }
         )
 
-        # Return just the Markdown report for the UI
-        return parsed_result["advisory_report"]
+        # Extract the report payload
+        report_payload = parsed_result.get("advisory_report", {})
+
+        # Route the dictionary through your new formatter!
+        return render_advisory_markdown(report_payload)

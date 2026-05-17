@@ -127,3 +127,38 @@ def fuse_weighted_results(
         fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True
     )
     return [doc_map[doc_hash] for doc_hash in reranked_hashes]
+
+
+def render_advisory_markdown(response_data: dict) -> str:
+    """
+    Converts the structured JSON output from the Sentinel Output Parser
+    into readable Markdown.
+    """
+    if isinstance(response_data, str):
+        return response_data
+
+    md = ""
+
+    if "executive_summary" in response_data:
+        md += f"### 📑 Executive Summary\n{response_data['executive_summary']}\n\n"
+
+    if "comparison_table" in response_data:
+        md += f"### ⚖️ Policy Comparison\n{response_data['comparison_table']}\n\n"
+
+    if "deep_dive" in response_data:
+        md += f"### 🔍 Deep Dive\n{response_data['deep_dive']}\n\n"
+
+    if "risk_disclosure" in response_data:
+        md += f"### ⚠️ Risk Disclosure\n{response_data['risk_disclosure']}\n\n"
+
+    if "follow_up_questions" in response_data and response_data["follow_up_questions"]:
+        md += "### ❓ Follow-up Questions\n"
+        for q in response_data["follow_up_questions"]:
+            md += f"- {q}\n"
+        md += "\n"
+
+    if "mandatory_disclaimer" in response_data:
+        md += "---\n"
+        md += f"*{response_data['mandatory_disclaimer']}*"
+
+    return md

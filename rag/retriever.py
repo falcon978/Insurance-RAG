@@ -34,7 +34,7 @@ class UpstashRediSearchRetriever:
         self.index_name = f"idx:{collection_name}"
         self.k = k
 
-    @traceable(run_type="retriever", name="Redis_BM25_Lexical")
+    @traceable(run_type="retriever", name="BM25Retriever", tags=["Redis"])
     async def ainvoke(self, query: str) -> List[Document]:
         from redis.commands.search.query import Query
 
@@ -44,8 +44,11 @@ class UpstashRediSearchRetriever:
             if not clean_query:
                 return []
 
-            # Execute native BM25 search on the Upstash server
-            q = Query(clean_query).paging(0, self.k)
+            # BM25 OR query logic
+            or_query = " | ".join(clean_query.split())
+
+            # Execute native BM25 search on the Redis server
+            q = Query(or_query).paging(0, self.k)
             res = await self.redis_client.ft(self.index_name).search(q)
 
             docs = []
