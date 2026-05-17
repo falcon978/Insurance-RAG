@@ -209,9 +209,11 @@ class PolicyVectorStore:
         Asynchronously creates a RediSearch index (if missing) and batch uploads
         documents to Upstash Redis for serverless BM25 execution.
         """
-        import redis.asyncio as redis
         from redis.commands.search.field import TextField, TagField
         from redis.commands.search.indexDefinition import IndexDefinition, IndexType
+
+        # 2. Assign the 'redis' alias LAST
+        import redis.asyncio as redis
 
         if not self.redis_client:
             raise ValueError("Redis client was not injected into the indexer.")
