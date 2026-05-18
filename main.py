@@ -5,6 +5,13 @@ FastAPI Backend. Orchestrates ingestion and RAG querying.
 """
 
 import os
+
+# --- HARDCODE THREAD LIMITS TO PREVENT CPU THRASHING ---
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Prevents HF tokenizer thread warnings
+
 import logging
 import sys
 import shutil
