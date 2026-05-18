@@ -250,7 +250,7 @@ with tab_admin:
                     "Chunk Size",
                     min_value=500,
                     max_value=5000,
-                    value=2200,
+                    value=2000,
                     step=100,
                     help="Target characters per chunk.",
                 )
@@ -259,7 +259,7 @@ with tab_admin:
                     "Chunk Overlap",
                     min_value=0,
                     max_value=1000,
-                    value=400,
+                    value=300,
                     step=50,
                     help="Overlapping characters to maintain context between chunks.",
                 )

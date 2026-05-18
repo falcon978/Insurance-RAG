@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class MarkdownHierarchicalChunker:
-    def __init__(self, chunk_size: int = 2200, chunk_overlap: int = 400):
+    def __init__(self, chunk_size: int = 2000, chunk_overlap: int = 300):
         # 1. Define the Markdown hierarchy to track
         self.headers_to_split_on = [
             ("#", "major_section"),  # L1 (e.g., PART III - EXCLUSIONS)
@@ -51,8 +51,8 @@ class MarkdownHierarchicalChunker:
         structural_docs = self.md_splitter.split_text(md_text)
 
         # # 2. Sub-split by Character Limit
-        # final_docs = self.text_splitter.split_documents(structural_docs)
-        final_docs = structural_docs  # SKIP: Size-based splitting is optional for policies due to their natural sectioning
+        final_docs = self.text_splitter.split_documents(structural_docs)
+        # final_docs = structural_docs  # SKIP: Size-based splitting is optional for policies due to their natural sectioning
 
         policy_chunks = []
         current_page = 1  # Stateful tracker

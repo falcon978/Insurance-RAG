@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     default_lexical_weight: float = float(os.getenv("DEFAULT_LEXICAL_WEIGHT", 0.5))
 
     # Default Ingestion Hyperparameters
-    default_chunk_size: int = int(os.getenv("CHUNK_SIZE", 2200))
-    default_chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 400))
+    default_chunk_size: int = int(os.getenv("CHUNK_SIZE", 2000))
+    default_chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 300))
 
     # LLM and Device Config
     admin_password: str = os.getenv("ADMIN_PASSWORD", "admin123")
