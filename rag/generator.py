@@ -12,6 +12,7 @@ import logging
 from typing import List, Optional
 from langchain_core.documents import Document
 from langchain_core.output_parsers import BaseOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from rag.utils import format_retrieved_context, render_advisory_markdown
 from rag.generation_prompts import (
@@ -119,12 +120,19 @@ class ResponseGenerator:
 
         context_string = format_retrieved_context(docs, policy_name)
 
+        formatted_history = []
+        for msg in history or []:
+            if msg.get("role") == "user":
+                formatted_history.append(HumanMessage(content=msg.get("content", "")))
+            elif msg.get("role") == "assistant":
+                formatted_history.append(AIMessage(content=msg.get("content", "")))
+
         # LCEL execution: Prompt -> LLM -> Custom Sentinel Parser
         chain = single_policy_unified_template | self.llm | self.parser
 
         # ainvoke() returns the dictionary defined in SentinelOutputParser
         parsed_result = await chain.ainvoke(
-            {"context": context_string, "query": query, "history": history or []}
+            {"context": context_string, "query": query, "history": formatted_history}
         )
 
         # Extract the report payload
@@ -150,6 +158,13 @@ class ResponseGenerator:
             format_retrieved_context(docs_b, name_b) if docs_b else "No context found."
         )
 
+        formatted_history = []
+        for msg in history or []:
+            if msg.get("role") == "user":
+                formatted_history.append(HumanMessage(content=msg.get("content", "")))
+            elif msg.get("role") == "assistant":
+                formatted_history.append(AIMessage(content=msg.get("content", "")))
+
         # LCEL execution: Prompt -> LLM -> Custom Sentinel Parser
         chain = compare_policies_unified_template | self.llm | self.parser
 
@@ -159,7 +174,7 @@ class ResponseGenerator:
                 "context_a": context_a,
                 "context_b": context_b,
                 "query": query,
-                "history": history or [],
+                "history": formatted_history,
             }
         )
 

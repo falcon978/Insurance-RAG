@@ -33,13 +33,14 @@ if "admin_logged_in" not in st.session_state:
 # ---------------------------------------------------------------------------
 # API Communication Helpers
 # ---------------------------------------------------------------------------
-@st.cache_data(ttl=5)  # Cache briefly to prevent redundant API calls
+@st.cache_data(ttl=180)  # Cache briefly to prevent redundant API calls
 def fetch_collections():
     """Fetches the list of available insurance policy collections from the API."""
     try:
         res = requests.get(f"{API_BASE_URL}/api/v1/admin/collections", timeout=5)
         res.raise_for_status()
-        return res.json().get("collections", [])
+        collections = res.json().get("collections", [])
+        return sorted(collections)
     except Exception as e:
         st.error(f"Failed to connect to backend: {e}")
         return []
