@@ -83,9 +83,14 @@ async def test_full_rag_triad(
         rerank_top_k=eval_settings.rerank_top_k,
     )
 
+    expected_output_str = (
+        f"Keywords to include: {', '.join(keywords)}. Logic: {reasoning}"
+    )
+
     test_case = LLMTestCase(
         input=query,
         actual_output=actual_output,
+        expected_output=expected_output_str,
         retrieval_context=retrieved_contexts,
         expected_retrieval_context=expected_snippets,
     )
@@ -115,12 +120,12 @@ async def test_full_rag_triad(
     assert_test(
         test_case,
         [
-            recall_metric,
-            precision_metric,
-            faithfulness_metric,
-            relevancy_metric,
-            correctness_metric,
-            reasoning_metric,
+            recall_metric,  # Evaluates embedding model (Recall@K)
+            precision_metric,  # Evaluates reranker/ranking (MRR)
+            faithfulness_metric,  # Evaluates LLM hallucination
+            relevancy_metric,  # Evaluates generic answer quality
+            correctness_metric,  # Did the LLM reach the correct legal outcome?
+            reasoning_metric,  # Did the LLM use the right policy logic?
         ],
-        run_async=False,  # Let DeepEval handle its own internal async logic safely
+        run_async=False,  # Forces metrics to evaluate one-by-one
     )
