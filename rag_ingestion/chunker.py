@@ -50,8 +50,9 @@ class MarkdownHierarchicalChunker:
         # 1. Structural Split (By Headers)
         structural_docs = self.md_splitter.split_text(md_text)
 
-        # 2. Sub-split by Character Limit
-        final_docs = self.text_splitter.split_documents(structural_docs)
+        # # 2. Sub-split by Character Limit
+        # final_docs = self.text_splitter.split_documents(structural_docs)
+        final_docs = structural_docs  # SKIP: Size-based splitting is optional for policies due to their natural sectioning
 
         policy_chunks = []
         current_page = 1  # Stateful tracker
