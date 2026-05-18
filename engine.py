@@ -13,6 +13,7 @@ Responsibilities:
 import asyncio
 import logging
 from typing import List, Optional
+import time
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -153,8 +154,18 @@ class InsuranceRAGEngine:
         # Concatenates the lexical and semantic strings to provide comprehensive context to the Cross-Encoder.
         combined_rerank_string = f"{bm25_string} {vector_string}"
 
+        logger.info(
+            f"Starting Cross-Encoder Reranking for {len(fused_docs)} documents..."
+        )
+        start_time = time.time()
+
         best_docs = await self.reranker.a_rerank(
             query=combined_rerank_string, documents=fused_docs, top_k=rerank_k
+        )
+
+        end_time = time.time()
+        logger.info(
+            f"====== RERANKING LATENCY: {end_time - start_time:.2f} seconds ======"
         )
 
         # 5. Unified Single-Pass Generation
@@ -215,6 +226,11 @@ class InsuranceRAGEngine:
         # 4. Cross-Encoder Reranking
         combined_rerank_string = f"{bm25_string} {vector_string}"
 
+        logger.info(
+            f"Starting Cross-Encoder Reranking for {len(fused_a)} policy a and {len(fused_b)} policy b documents..."
+        )
+        start_time = time.time()
+
         # Delegates CPU-bound reranking tasks to background threads concurrently
         best_a, best_b = await asyncio.gather(
             self.reranker.a_rerank(
@@ -223,6 +239,11 @@ class InsuranceRAGEngine:
             self.reranker.a_rerank(
                 query=combined_rerank_string, documents=fused_b, top_k=rerank_k
             ),
+        )
+
+        end_time = time.time()
+        logger.info(
+            f"====== RERANKING LATENCY: {end_time - start_time:.2f} seconds ======"
         )
 
         # 5. Unified Single-Pass Comparative Generation

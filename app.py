@@ -88,7 +88,7 @@ with st.sidebar:
             "Rerank K (LLM Context Window)",
             1,
             10,
-            3,
+            5,
             help="Final number of top chunks sent to the LLM for adjudication.",
         )
 

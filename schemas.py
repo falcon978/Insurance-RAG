@@ -15,7 +15,7 @@ class SingleQueryRequest(BaseModel):
     # History format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
     history: Optional[List[Dict[str, str]]] = []
     retrieve_top_k: int = 15
-    rerank_top_k: int = 3
+    rerank_top_k: int = 5
 
 
 class CompareQueryRequest(BaseModel):
@@ -24,7 +24,7 @@ class CompareQueryRequest(BaseModel):
     collection_b: str
     history: Optional[List[Dict[str, str]]] = []
     retrieve_top_k: int = 15
-    rerank_top_k: int = 3
+    rerank_top_k: int = 5
 
 
 class UrlIngestRequest(BaseModel):
