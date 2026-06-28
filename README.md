@@ -1,111 +1,132 @@
+# 🛡️ Insurance-RAG 
+
+An advanced, production-grade Retrieval-Augmented Generation (RAG) system built to accurately analyze, query, and compare complex insurance policies. 
+
+Unlike standard RAG pipelines that often hallucinate or miss critical legal nuances, this system is specifically engineered for high-stakes document analysis. It utilizes parallel hybrid search, cross-encoder reranking, and deterministic Chain-of-Thought LLM generation to ensure every answer is grounded, factual, and strictly adheres to policy inclusions and exclusions.
+
+**Live Demo:** [Streamlit](https://insurance-rag-978.streamlit.app/)
+
 ---
-title: Insurance RAG
-emoji: 🏥
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_port: 7860
+
+## 🌟 Overview (For Product & Business Teams)
+
+Reading insurance policies is tedious and error-prone. This application solves that by allowing users to upload policy documents and ask plain-English questions (e.g., *"Is a pre-existing ACL tear covered?"* or *"Compare the maternity benefits between these two policies"*). 
+
+**Key Benefits:**
+* **Zero Hallucinations:** The AI is mathematically constrained to only answer based on the provided text. If a policy is ambiguous or silent on an issue, the system explicitly flags it rather than guessing.
+* **Legal Logic Emulation:** The system evaluates documents in a strict hierarchy: *Specific Exceptions -> General Exclusions -> Explicit Coverage -> Ambiguity*.
+* **Deep Comparisons:** Capable of analyzing two different policies side-by-side to highlight coverage gaps and premium-to-benefit ratios.
+
 ---
 
-# Insurance RAG: Legal-Grade Policy Analysis Engine
+## ⚙️ Technical Architecture (For Engineering Teams)
 
-An advanced Retrieval-Augmented Generation (RAG) system designed to parse, index, and analyze complex insurance policy documents with high legal accuracy. This system utilizes a **Unified Single-Pass Architecture** to provide conversational clarity while maintaining strict adherence to policy clauses, waiting periods, and exclusions.
+This project was developed with a microservices-ready architecture, prioritizing retrieval accuracy, strict prompt engineering, and low-latency inference on CPU-bound environments. 
 
-## 🏗️ Architecture Overview
+### Core Pipeline Components
+1. **Hierarchical Ingestion:** Extracts text from PDFs while preserving document structures (Sections -> Clauses -> Sub-clauses) using Markdown markers.
+2. **Parallel Hybrid Search:** Translates user queries into optimized legal/medical terms. It simultaneously fires a Vector Search (Pinecone) for semantic meaning and a BM25 Search (Redis) for exact legal phrasing matching.
+3. **Reciprocal Rank Fusion (RRF):** Merges the results of the semantic and lexical searches mathematically to surface the most robust candidate chunks.
+4. **Lightweight Cross-Encoder Reranking:** Passes the fused results through `ms-marco-MiniLM-L-12-v2`. This model was specifically chosen to drastically improve contextual precision while keeping latency exceptionally low on standard Hugging Face CPU tiers.
+5. **Deterministic Generation (Gemini):** Utilizes a custom Sentinel Output Parser. The LLM is forced to output its internal reasoning in strict JSON format before generating the user-facing Markdown report. This creates a highly auditable Chain-of-Thought.
+6. **Observability & Tracing:** Integrated with **LangSmith** to capture full execution traces, allowing detailed debugging of the prompt engineering steps, multi-stage retrieval paths, and reranking latencies.
 
-The project is built on a decoupled, microservices-ready architecture:
+### Tech Stack
+* **Backend:** FastAPI, Python
+* **Frontend:** Streamlit (`app.py`, `eval_dashboard.py`)
+* **AI / Models:** Google Gemini (Generation), ms-marco-MiniLM (Cross-Encoder Reranker), BAAI/bge-large-en (Embeddings)
+* **Databases:** Pinecone (Vector Store), Redis (BM25 Lexical Store)
+* **Testing:** DeepEval (Correctness & Reasoning Faithfulness metrics)
 
-* **Frontend**: A Streamlit-based dashboard providing conversational chat with sliding window memory and an admin panel for collection management.
-* **Backend**: A FastAPI orchestration layer managing ingestion pipelines and RAG query execution.
-* **Ingestion Pipeline**: A multi-stage engine using `PyMuPDF` for layout-aware extraction, hierarchical Markdown chunking, and dual-vector/lexical indexing.
-* **RAG Engine**: A hybrid search system combining semantic embeddings with BM25 lexical search, followed by a Cross-Encoder reranking stage.
+---
 
-## 🚀 Key Features
+## 📂 Repository Structure
 
-### 1. Hybrid Search & Reranking
+* `app.py`: Streamlit UI entry point
+* `main.py`: FastAPI backend orchestrator & endpoints
+* `config.py`: Central environment and model configurations
+* `rag_ingestion/`: PDF extraction, cleaning, hierarchical chunking, and indexing
+* `rag/`: Retrieval engine, prompt templates, rerankers, and LLM generators
+* `evaluations/`: DeepEval testing suite and custom insurance metrics
+* `notebooks/`: Jupyter notebooks for pipeline walk-throughs and A/B testing
+* `Dockerfile`: Containerization for Hugging Face Spaces
 
-* **Dual Retrieval**: Combines semantic meaning via `BAAI/bge-large-en-v1.5` with keyword precision using `BM25Retriever`.
-* **Reciprocal Rank Fusion (RRF)**: Merges retrieval streams using weighted scoring to deduplicate and re-score documents.
-* **Cross-Encoder Reranking**: Utilizes `BGE-Reranker-v2-m3` to score the top-K candidates against the query for maximum contextual relevance.
+---
 
-### 2. Unified Single-Pass Generation
-
-* **Sentinel Extraction**: Employs a custom `SentinelOutputParser` using strict `<<<BEGIN>>>` tags to separate internal "Adjudication JSON" (Chain-of-Thought) from the user-facing "Advisory Report".
-* **Deterministic Logic**: Powered by Google Gemini with a temperature of 0.0 to ensure consistent, evidence-based responses.
-
-### 3. Automated Evaluation Suite
-
-* **DeepEval Integration**: Uses G-Eval metrics to assess "Answer Correctness" and "Reasoning Faithfulness" independently.
-* **Double-Citation Mandate**: Ensures every claim in the generated report is backed by specific snippets from the policy documents.
-
-## 🛠️ Tech Stack
-
-* **Frameworks**: FastAPI, Streamlit, LangChain.
-* **LLMs**: Google Gemini (3-Flash-Preview & 3.1-Flash-Lite).
-* **Vector DBs**: ChromaDB (Local) or Pinecone (Cloud).
-* **Embeddings**: HuggingFace Sentence-Transformers.
-
-## 📥 Getting Started
+## 🚀 Getting Started (Local Development)
 
 ### Prerequisites
-
 * Python 3.10+
+* Redis server running locally or via Docker
+* Pinecone API Key
 * Google Gemini API Key
 
 ### Installation
 
+1. **Clone the repository**
+   ```bash
+   git clone [https://github.com/yourusername/insurance-rag.git](https://github.com/yourusername/insurance-rag.git)
+   cd insurance-rag
+
+# Setup
+
+## 1. Set up a Virtual Environment
+
 ```bash
-# Install dependencies
+python -m venv venv
+
+# macOS/Linux
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
+```
+
+## 2. Install Dependencies
+
+```bash
 pip install -r requirements.txt
-
 ```
 
-### Configuration
+## 3. Configure Environment Variables
 
-Create a `.env` file or export variables based on `config.py`:
+Create a `.env` file in the project root and add the following:
+
+```env
+PINECONE_API_KEY=your_key
+GEMINI_API_KEY=your_key
+REDIS_URL=redis://localhost:6379
+```
+
+The system relies on a highly configurable environment architecture, managed via Pydantic BaseSettings. Using the .env file, you can easily experiment with different providers, models, and runtime settings without modifying the codebase.
+
+## 4. Run the Backend (FastAPI)
 
 ```bash
-GEMINI_API_KEY=your_key_here
-VECTOR_DB_TYPE=chroma  # or 'pinecone'
-HF_DEVICE=cpu          # or 'cuda' for GPU acceleration
-
+uvicorn main:app --reload
 ```
 
-### Running the System
+## 5. Run the Frontend (Streamlit)
 
-1. **Start the Backend API**:
-```bash
-uvicorn main:app --reload --port 8000
-
-```
-
-
-2. **Start the Frontend Client**:
 ```bash
 streamlit run app.py
-
 ```
 
+---
 
+# 🧪 Evaluation & Testing
 
-## 📂 Project Structure
+This project includes an automated evaluation pipeline built with **DeepEval** to comprehensively test both the retrieval and generation stages of the RAG lifecycle. 
 
-* `main.py`: FastAPI endpoints for ingestion and querying.
-* `app.py`: Streamlit UI for chat and admin management.
-* `rag/`: Core logic for retrieval, reranking, and generation.
-* `rag_ingestion/`: PDF extraction and hierarchical chunking pipelines.
-* `evaluations/`: DeepEval metrics and test cases for pipeline validation.
+The test suite evaluates the system across multiple parameters:
+* **Answer Correctness:** Does the final answer accurately resolve the user's query based on the golden dataset?
+* **Reasoning Faithfulness (Hallucination Detection):** Is the generated reasoning and final response strictly derived from the retrieved context without fabricating information?
+* **Contextual Precision:** Evaluates the reranking stage (`test_reranker_impact.py`) to ensure the most relevant policy chunks are pushed to the top of the context window.
+* **Contextual Recall:** Evaluates the retrieval strategy (`test_hybrid_vs_semantic.py`) to ensure the hybrid search successfully retrieves all necessary clauses and exclusions required to answer the query.
+* **Answer Relevancy:** Ensures the response is direct, concise, and free of redundant or off-topic information.
 
-## 🤝 Contributing
+To run the evaluation suite against the golden dataset:
 
-Contributions are welcome! Please:
-
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/improvement`).
-3. Commit your changes (`git commit -am 'Add improvement'`).
-4. Push to the branch (`git push origin feature/improvement`).
-5. Submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License — see the LICENSE file for details.
+```bash
+pytest evaluations/test_cases/
+```
