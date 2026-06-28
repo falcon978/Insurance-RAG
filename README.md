@@ -1,4 +1,4 @@
-# 🛡️ Insurance-RAG 
+# Insurance-RAG 
 
 An advanced, production-grade Retrieval-Augmented Generation (RAG) system built to accurately analyze, query, and compare complex insurance policies. 
 
