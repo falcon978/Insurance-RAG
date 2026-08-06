@@ -13,7 +13,7 @@ Unlike standard RAG pipelines that often hallucinate or miss critical legal nuan
 Reading insurance policies is tedious and error-prone. This application solves that by allowing users to upload policy documents and ask plain-English questions (e.g., *"Is a pre-existing ACL tear covered?"* or *"Compare the maternity benefits between these two policies"*). 
 
 **Key Benefits:**
-* **Zero Hallucinations:** The AI is mathematically constrained to only answer based on the provided text. If a policy is ambiguous or silent on an issue, the system explicitly flags it rather than guessing.
+* **Minimal Hallucinations:** The AI is mathematically constrained to only answer based on the provided text. If a policy is ambiguous or silent on an issue, the system explicitly flags it rather than guessing.
 * **Legal Logic Emulation:** The system evaluates documents in a strict hierarchy: *Specific Exceptions -> General Exclusions -> Explicit Coverage -> Ambiguity*.
 * **Deep Comparisons:** Capable of analyzing two different policies side-by-side to highlight coverage gaps and premium-to-benefit ratios.
 
