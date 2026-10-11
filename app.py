@@ -15,11 +15,12 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # Configuration & State Initialization
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="Insurance Policy RAG", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="Insurance Policy RAG", layout="wide")
 
 # API endpoint from environment or default local
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 ADMIN_PWD = os.environ.get("ADMIN_PASSWORD", "admin123")
+MAX_HISTORY_MESSAGES = int(os.environ.get("MAX_HISTORY_MESSAGES", "6"))
 
 # Initialize Chat History in Session State
 if "messages" not in st.session_state:
@@ -52,7 +53,7 @@ available_policies = fetch_collections()
 # UI Sidebar - Navigation & Settings
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header("🏥 RAG Configuration")
+    st.header("Configuration")
     mode = st.radio("Analysis Mode", ["Query Single Policy", "Compare Two Policies"])
 
     st.divider()
@@ -73,7 +74,7 @@ with st.sidebar:
 
     st.divider()
 
-    with st.expander("⚙️ Advanced RAG Tuning"):
+    with st.expander("Advanced Tuning"):
         st.info(
             "Adjust these to balance between broader context and strict legal accuracy."
         )
@@ -93,14 +94,14 @@ with st.sidebar:
         )
 
     st.divider()
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
+    if st.button("Clear History", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
 # ---------------------------------------------------------------------------
 # Main UI Tabs
 # ---------------------------------------------------------------------------
-tab_chat, tab_admin = st.tabs(["💬 Policy Chatbot", "🛠️ Admin Dashboard"])
+tab_chat, tab_admin = st.tabs(["Policy Query", "Administration"])
 
 # ===========================================================================
 # TAB 1: CONVERSATIONAL CHAT
@@ -122,10 +123,10 @@ with tab_chat:
         with st.chat_message("assistant"):
             with st.spinner("Analyzing legal clauses and limits..."):
                 try:
-                    # IMPLEMENT SLIDING WINDOW: Only send the last 6 messages as history
+                    # IMPLEMENT SLIDING WINDOW: Use configurable history length
                     # This ensures the LLM has immediate context without hitting token limits.
                     history_payload = (
-                        st.session_state.messages[-7:-1]
+                        st.session_state.messages[-(MAX_HISTORY_MESSAGES + 1):-1]
                         if st.session_state.messages
                         else []
                     )
@@ -188,7 +189,7 @@ with tab_admin:
             else:
                 st.error("Incorrect password.")
     else:
-        st.markdown("### 🛠️ Database Management")
+        st.markdown("### Database Management")
         if st.button("Logout"):
             st.session_state.admin_logged_in = False
             st.rerun()
@@ -196,7 +197,7 @@ with tab_admin:
         st.divider()
 
         # Section A: Existing Collections Manager
-        st.markdown("#### 📁 Current Document Collections")
+        st.markdown("#### Indexed Collections")
         if not available_policies:
             st.info("The database is currently empty.")
         else:
@@ -220,7 +221,7 @@ with tab_admin:
         st.divider()
 
         # Section B: Ingestion Pipeline
-        st.markdown("#### 📥 Add New Document")
+        st.markdown("#### Ingest Document")
         doc_key = (
             st.text_input(
                 "Collection Key",
@@ -241,8 +242,8 @@ with tab_admin:
         else:
             st.text_input("Direct PDF URL", key="url_input")
 
-        # --- NEW: Advanced Chunking Settings UI ---
-        with st.expander("⚙️ Advanced Chunking Settings"):
+        # --- Chunking Settings UI ---
+        with st.expander("Chunking Parameters"):
             col_c1, col_c2 = st.columns(2)
             with col_c1:
                 # Using pre-filled values based on typical defaults

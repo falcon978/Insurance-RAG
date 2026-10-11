@@ -1,132 +1,138 @@
-# Insurance-RAG 
+# Insurance-RAG
 
-An advanced, production-grade Retrieval-Augmented Generation (RAG) system built to accurately analyze, query, and compare complex insurance policies. 
+Insurance-RAG is a retrieval-augmented generation system for querying, analyzing, and comparing insurance policy documents. It combines layout-preserving document extraction, dual-track hybrid retrieval, cross-encoder reranking, and structured schema validation.
 
-Unlike standard RAG pipelines that often hallucinate or miss critical legal nuances, this system is specifically engineered for high-stakes document analysis. It utilizes parallel hybrid search, cross-encoder reranking, and deterministic Chain-of-Thought LLM generation to ensure every answer is grounded, factual, and strictly adheres to policy inclusions and exclusions.
+## System Architecture
 
-**Live Demo:** [Streamlit](https://insurance-rag-978.streamlit.app/)
+Insurance policies are legal contracts with interlocking dependencies, including definitions, waiting periods, sub-limits, general exclusions, and conditional riders. Naive chunking and single-vector similarity search frequently miss relevant exclusion clauses or misattribute definitions.
 
----
+The system addresses these structural constraints through a dual-track ingestion and retrieval pipeline:
 
-## 🌟 Overview (For Product & Business Teams)
+```mermaid
+graph TD
+    subgraph Ingestion["1. Document Ingestion Pipeline"]
+        PDF["Policy PDF"] --> Extractor["PyMuPDF4LLM Markdown Extractor"]
+        Extractor --> Cleaner["Markdown Layout Cleaner"]
+        Cleaner --> Chunker["MarkdownHierarchicalChunker"]
+        Chunker --> VectorStore["Dense Vector Store: Chroma / Pinecone"]
+        Chunker --> LexicalStore["Lexical BM25 Store: RediSearch / RAM"]
+    end
 
-Reading insurance policies is tedious and error-prone. This application solves that by allowing users to upload policy documents and ask plain-English questions (e.g., *"Is a pre-existing ACL tear covered?"* or *"Compare the maternity benefits between these two policies"*). 
-
-**Key Benefits:**
-* **Minimal Hallucinations:** The AI is mathematically constrained to only answer based on the provided text. If a policy is ambiguous or silent on an issue, the system explicitly flags it rather than guessing.
-* **Legal Logic Emulation:** The system evaluates documents in a strict hierarchy: *Specific Exceptions -> General Exclusions -> Explicit Coverage -> Ambiguity*.
-* **Deep Comparisons:** Capable of analyzing two different policies side-by-side to highlight coverage gaps and premium-to-benefit ratios.
-
----
-
-## ⚙️ Technical Architecture (For Engineering Teams)
-
-This project was developed with a microservices-ready architecture, prioritizing retrieval accuracy, strict prompt engineering, and low-latency inference on CPU-bound environments. 
-
-### Core Pipeline Components
-1. **Hierarchical Ingestion:** Extracts text from PDFs while preserving document structures (Sections -> Clauses -> Sub-clauses) using Markdown markers.
-2. **Parallel Hybrid Search:** Translates user queries into optimized legal/medical terms. It simultaneously fires a Vector Search (Pinecone) for semantic meaning and a BM25 Search (Redis) for exact legal phrasing matching.
-3. **Reciprocal Rank Fusion (RRF):** Merges the results of the semantic and lexical searches mathematically to surface the most robust candidate chunks.
-4. **Lightweight Cross-Encoder Reranking:** Passes the fused results through `ms-marco-MiniLM-L-12-v2`. This model was specifically chosen to drastically improve contextual precision while keeping latency exceptionally low on standard Hugging Face CPU tiers.
-5. **Deterministic Generation (Gemini):** Utilizes a custom Sentinel Output Parser. The LLM is forced to output its internal reasoning in strict JSON format before generating the user-facing Markdown report. This creates a highly auditable Chain-of-Thought.
-6. **Observability & Tracing:** Integrated with **LangSmith** to capture full execution traces, allowing detailed debugging of the prompt engineering steps, multi-stage retrieval paths, and reranking latencies.
-
-### Tech Stack
-* **Backend:** FastAPI, Python
-* **Frontend:** Streamlit (`app.py`, `eval_dashboard.py`)
-* **AI / Models:** Google Gemini (Generation), ms-marco-MiniLM (Cross-Encoder Reranker), BAAI/bge-large-en (Embeddings)
-* **Databases:** Pinecone (Vector Store), Redis (BM25 Lexical Store)
-* **Testing:** DeepEval (Correctness & Reasoning Faithfulness metrics)
-
----
-
-## 📂 Repository Structure
-
-* `app.py`: Streamlit UI entry point
-* `main.py`: FastAPI backend orchestrator & endpoints
-* `config.py`: Central environment and model configurations
-* `rag_ingestion/`: PDF extraction, cleaning, hierarchical chunking, and indexing
-* `rag/`: Retrieval engine, prompt templates, rerankers, and LLM generators
-* `evaluations/`: DeepEval testing suite and custom insurance metrics
-* `notebooks/`: Jupyter notebooks for pipeline walk-throughs and A/B testing
-* `Dockerfile`: Containerization for Hugging Face Spaces
-
----
-
-## 🚀 Getting Started (Local Development)
-
-### Prerequisites
-* Python 3.10+
-* Redis server running locally or via Docker
-* Pinecone API Key
-* Google Gemini API Key
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone [https://github.com/yourusername/insurance-rag.git](https://github.com/yourusername/insurance-rag.git)
-   cd insurance-rag
-
-# Setup
-
-## 1. Set up a Virtual Environment
-
-```bash
-python -m venv venv
-
-# macOS/Linux
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
+    subgraph QueryFlow["2. Hybrid Retrieval and Adjudication"]
+        UserQuery["User Inquiry"] --> Rewriter["Planner LLM / Query Rewriter"]
+        Rewriter -->|Semantic Search| VectorSearch["Dense Vector Search: bge-large-en-v1.5"]
+        Rewriter -->|Exact Match| LexicalSearch["BM25 Lexical Search: RediSearch"]
+        
+        VectorSearch --> RRF["Reciprocal Rank Fusion: RRF"]
+        LexicalSearch --> RRF
+        
+        RRF --> Reranker["Cross-Encoder Reranker: bge-reranker-v2-m3"]
+        Reranker --> LLM["Inference Generator: Gemini / Groq"]
+        LLM --> Formatter["Pydantic Structured Output Formatter"]
+        Formatter --> Response["Advisory and Adjudication Report"]
+    end
 ```
 
-## 2. Install Dependencies
+For the mathematical formulation of reciprocal rank fusion and architectural trade-offs, see the [Architecture Guide](docs/architecture.md).
+
+## Key Capabilities
+
+* Adjudication hierarchy: Enforces precedence across specific exceptions, general exclusions, explicit inclusions, and policy silence.
+* Structured output: Uses Pydantic models (`SinglePolicyResponse`, `ComparePolicyResponse`) to ensure consistent schemas without regex post-processing.
+* Cross-policy analysis: Evaluates coverage differences, sub-limits, and waiting periods across distinct policy contracts.
+* Storage and model backends:
+  * Vector storage: Chroma or Pinecone.
+  * Lexical retrieval: Redis (RediSearch) or in-memory BM25.
+  * Inference providers: Google Gemini or Groq (Llama 3.3).
+* Pre-warmed lifespan state: Models and database client connection pools are initialized once at server startup and reused across requests.
+
+## Quickstart
+
+### Option A: Docker Compose
+
+Deploys the FastAPI service, Streamlit interface, and Redis Stack instance:
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/falcon978/Insurance-RAG.git
+cd Insurance-RAG
+
+cp .env.example .env
+docker compose up --build
 ```
 
-## 3. Configure Environment Variables
+Service endpoints:
+* API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+* Web Interface: [http://localhost:8501](http://localhost:8501)
 
-Create a `.env` file in the project root and add the following:
+### Option B: Local Installation
 
-```env
-PINECONE_API_KEY=your_key
-GEMINI_API_KEY=your_key
-REDIS_URL=redis://localhost:6379
-```
-
-The system relies on a highly configurable environment architecture, managed via Pydantic BaseSettings. Using the .env file, you can easily experiment with different providers, models, and runtime settings without modifying the codebase.
-
-## 4. Run the Backend (FastAPI)
+Requires Python 3.12 or higher:
 
 ```bash
-uvicorn main:app --reload
-```
+python3.12 -m venv .venv
+source .venv/bin/activate
 
-## 5. Run the Frontend (Streamlit)
+pip install -e ".[backend,ui]"
 
-```bash
+# Start Redis for lexical indexing (optional if using LEXICAL_DB_TYPE=ram)
+docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest
+
+# Run services
+uvicorn main:app --port 8000 --reload
 streamlit run app.py
 ```
 
----
+Environment variable reference is documented in [.env.example](.env.example).
 
-# 🧪 Evaluation & Testing
+## Repository Structure
 
-This project includes an automated evaluation pipeline built with **DeepEval** to comprehensively test both the retrieval and generation stages of the RAG lifecycle. 
+```text
+├── api/                   # FastAPI routing, dependencies, and exception handlers
+│   ├── routers/           # Query and administrative endpoints
+│   ├── dependencies.py    # Dependency injection providers
+│   └── exception_handlers.py # Custom domain exception mapping
+├── rag/                   # Core RAG engine, factories, reranker, prompts, and schemas
+├── rag_ingestion/         # Document extraction, hierarchical chunking, and indexing
+├── evaluations/           # DeepEval benchmark suites, dataset, and judge wrapper
+├── docs/                  # System architecture, API, and evaluation documentation
+├── main.py                # Application entrypoint and lifespan management
+├── app.py                 # Streamlit interface
+├── docker-compose.yml     # Multi-container orchestration
+└── pyproject.toml         # Packaging and dependency configuration
+```
 
-The test suite evaluates the system across multiple parameters:
-* **Answer Correctness:** Does the final answer accurately resolve the user's query based on the golden dataset?
-* **Reasoning Faithfulness (Hallucination Detection):** Is the generated reasoning and final response strictly derived from the retrieved context without fabricating information?
-* **Contextual Precision:** Evaluates the reranking stage (`test_reranker_impact.py`) to ensure the most relevant policy chunks are pushed to the top of the context window.
-* **Contextual Recall:** Evaluates the retrieval strategy (`test_hybrid_vs_semantic.py`) to ensure the hybrid search successfully retrieves all necessary clauses and exclusions required to answer the query.
-* **Answer Relevancy:** Ensures the response is direct, concise, and free of redundant or off-topic information.
+## API Overview
 
-To run the evaluation suite against the golden dataset:
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/query/single` | Queries a single policy collection with optional conversation history. |
+| `POST` | `/api/v1/query/compare` | Compares coverage between two distinct policy collections. |
+| `POST` | `/api/v1/admin/ingest/file` | Ingests a policy PDF via multipart upload. |
+| `POST` | `/api/v1/admin/ingest/url` | Downloads and indexes a policy PDF from a URL. |
+| `GET` | `/api/v1/admin/collections` | Lists all indexed collections across the vector store. |
+| `DELETE` | `/api/v1/admin/collections/{name}` | Drops a collection from vector and lexical stores. |
+
+Complete request and response specifications are available in the [API Reference](docs/api.md).
+
+## Evaluation
+
+Automated evaluation is implemented with [DeepEval](https://github.com/confident-ai/deepeval):
+
+* Correctness and faithfulness: Assesses verdict accuracy and verifies citations against retrieved context.
+* Contextual precision: Measures ranking quality produced by the cross-encoder reranker.
+* Contextual recall: Verifies hybrid retrieval coverage against ground-truth policy clauses.
+
+To execute the test suite:
 
 ```bash
-pytest evaluations/test_cases/
+pip install -e ".[dev]"
+pytest evaluations/test_cases/test_standard_rag_metrics.py -v
 ```
+
+Judge configuration and benchmark methodology are documented in the [Evaluation Guide](docs/evaluation.md).
+
+## Documentation
+
+* [Architecture Guide](docs/architecture.md): Pipeline stages, scoring formulations, and operational trade-offs.
+* [Evaluation Guide](docs/evaluation.md): Benchmark metrics, test datasets, and LLM judge configurations.
+* [API Reference](docs/api.md): Endpoint specifications, request and response models, and cURL examples.
