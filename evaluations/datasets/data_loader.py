@@ -5,14 +5,14 @@ from pathlib import Path
 from evaluations.eval_config import eval_settings
 
 
-def load_golden_dataset(filename="golden_dataset.json"):
+def load_golden_dataset(filename="golden_dataset_v2.json"):
     """
     Loads the golden dataset for Pytest parameterization.
     Resolves the path relative to this script's location.
     """
-    # Assuming golden_dataset.json is at the root of the project (two levels up from this file)
+    # The datasets are stored in the same directory as this script
     current_dir = Path(__file__).resolve().parent
-    file_path = current_dir.parent.parent / filename
+    file_path = current_dir / filename
 
     if not file_path.exists():
         raise FileNotFoundError(f"Could not find golden dataset at: {file_path}")
@@ -27,8 +27,7 @@ def load_golden_dataset(filename="golden_dataset.json"):
             item["query"],
             item["source"],
             item["expected_snippet"],
-            item["expected_keywords"],
-            item["reasoning_path"],
+            item.get("expected_output", f"Keywords to include: {', '.join(item.get('expected_keywords', []))}. Logic: {item.get('reasoning_path', '')}"),
         )
         for item in data[eval_settings.start_index : eval_settings.end_index]
     ]

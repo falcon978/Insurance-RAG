@@ -42,7 +42,7 @@ async def rag_wrapper():
     pinecone_index = pc.Index(eval_settings.pinecone_index_name)
 
     # 3. Inject into the wrapper
-    wrapper = EvalRAGWrapper(redis_client=redis_client, pinecone_index=pinecone_index)
+    wrapper = EvalRAGWrapper(vector_client=pinecone_index, lexical_client=redis_client)
 
     yield wrapper
 

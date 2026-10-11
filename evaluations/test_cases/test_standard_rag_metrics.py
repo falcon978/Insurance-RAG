@@ -51,17 +51,18 @@ async def rag_wrapper():
     pinecone_index = pc.Index(eval_settings.pinecone_index_name)
 
     # 3. Inject into the wrapper
-    wrapper = EvalRAGWrapper(redis_client=redis_client, pinecone_index=pinecone_index)
+    wrapper = EvalRAGWrapper(vector_client=pinecone_index, lexical_client=redis_client)
 
     yield wrapper
 
     # 4. Graceful Teardown after all tests finish
     await redis_client.aclose()
+    pc.close()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "case_id, query, source, expected_snippets, keywords, reasoning",
+    "case_id, query, source, expected_snippets, expected_output",
     load_golden_dataset(),
 )
 async def test_full_rag_triad(
@@ -69,12 +70,9 @@ async def test_full_rag_triad(
     query,
     source,
     expected_snippets,
-    keywords,
-    reasoning,
+    expected_output,
     rag_wrapper,  # <-- INJECT FIXTURE HERE
 ):
-    await asyncio.sleep(eval_settings.rate_limit_delay_seconds)
-
     # Call a_query on the injected wrapper instance
     actual_output, retrieved_contexts = await rag_wrapper.a_query(
         query=query,
@@ -83,14 +81,10 @@ async def test_full_rag_triad(
         rerank_top_k=eval_settings.rerank_top_k,
     )
 
-    expected_output_str = (
-        f"Keywords to include: {', '.join(keywords)}. Logic: {reasoning}"
-    )
-
     test_case = LLMTestCase(
         input=query,
         actual_output=actual_output,
-        expected_output=expected_output_str,
+        expected_output=expected_output,
         retrieval_context=retrieved_contexts,
         expected_retrieval_context=expected_snippets,
     )
@@ -127,5 +121,5 @@ async def test_full_rag_triad(
             correctness_metric,  # Did the LLM reach the correct legal outcome?
             reasoning_metric,  # Did the LLM use the right policy logic?
         ],
-        run_async=False,  # Forces metrics to evaluate one-by-one
+        run_async=True,
     )
