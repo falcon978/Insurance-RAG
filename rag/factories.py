@@ -14,6 +14,9 @@ from langchain_core.vectorstores import VectorStore
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 
 try:
     from langchain_pinecone import PineconeVectorStore
@@ -21,7 +24,8 @@ except ImportError:
     PineconeVectorStore = None
 
 from config import settings
-from rag.retriever import UpstashRediSearchRetriever
+from rag.retriever import RedisSearchRetriever
+from rag.exceptions import VectorStoreError, LexicalStoreError
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +35,27 @@ class VectorStoreFactory:
 
     @staticmethod
     def get_vector_store(
-        collection_name: str, embeddings: Embeddings, pinecone_index=None
+        collection_name: str,
+        embeddings: Embeddings,
+        vector_client=None,
     ) -> VectorStore:
         if settings.vector_db_type == "pinecone":
-            if not PineconeVectorStore or pinecone_index is None:
-                raise ValueError("Pinecone is not installed or the API key is missing.")
+            if not PineconeVectorStore or vector_client is None:
+                raise VectorStoreError("Pinecone is not installed or the API key is missing.")
 
             logger.info(f"Connecting to Pinecone namespace: {collection_name}")
             return PineconeVectorStore(
-                index=pinecone_index, embedding=embeddings, namespace=collection_name
+                index=vector_client, embedding=embeddings, namespace=collection_name
             )
 
         elif settings.vector_db_type == "chroma":
             logger.info(f"Connecting to Chroma local collection: {collection_name}")
+            if vector_client is not None:
+                return Chroma(
+                    client=vector_client,
+                    collection_name=collection_name,
+                    embedding_function=embeddings,
+                )
             return Chroma(
                 collection_name=collection_name,
                 embedding_function=embeddings,
@@ -51,18 +63,22 @@ class VectorStoreFactory:
             )
 
         else:
-            raise ValueError(f"Unsupported vector_db_type: {settings.vector_db_type}")
+            raise VectorStoreError(f"Unsupported vector_db_type: {settings.vector_db_type}")
 
 
 class LexicalStoreFactory:
     """Factory for initializing Lexical Databases (Keyword/BM25 Search)."""
 
     @staticmethod
-    def get_lexical_retriever(collection_name: str, top_k: int, redis_client=None):
+    def get_lexical_retriever(
+        collection_name: str,
+        top_k: int,
+        lexical_client=None,
+    ):
         if settings.lexical_db_type == "redis":
-            logger.info(f"Connecting to Upstash RediSearch index: {collection_name}")
-            return UpstashRediSearchRetriever(
-                redis_client=redis_client,
+            logger.info(f"Connecting to RediSearch index: {collection_name}")
+            return RedisSearchRetriever(
+                redis_client=lexical_client,
                 collection_name=collection_name,
                 k=top_k,
             )
@@ -71,7 +87,7 @@ class LexicalStoreFactory:
             return LexicalStoreFactory._load_ram_bm25(collection_name, top_k)
 
         else:
-            raise ValueError(f"Unsupported lexical_db_type: {settings.lexical_db_type}")
+            raise LexicalStoreError(f"Unsupported lexical_db_type: {settings.lexical_db_type}")
 
     @staticmethod
     def _load_ram_bm25(collection_name: str, top_k: int) -> Optional[BM25Retriever]:
@@ -94,4 +110,31 @@ class LexicalStoreFactory:
             return retriever
         except Exception as e:
             logger.error(f"Failed to load RAM BM25 index: {e}")
-            return None
+            raise LexicalStoreError(f"Failed to load RAM BM25 index: {e}")
+
+
+class InferenceModelFactory:
+    """Factory for initializing the primary RAG Chat Model."""
+
+    @staticmethod
+    def get_chat_model(model_name: str, temperature: float = 0.0) -> BaseChatModel:
+        if settings.inference_provider == "gemini":
+            if not settings.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY is missing.")
+            logger.info(f"Connecting to Gemini Inference Model: {model_name}")
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                temperature=temperature,
+                api_key=settings.gemini_api_key,
+            )
+        elif settings.inference_provider == "groq":
+            if not settings.groq_api_key:
+                raise ValueError("GROQ_API_KEY is missing.")
+            logger.info(f"Connecting to Groq Inference Model: {model_name}")
+            return ChatGroq(
+                model=model_name,
+                temperature=temperature,
+                groq_api_key=settings.groq_api_key,
+            )
+        else:
+            raise ValueError(f"Unsupported inference provider: {settings.inference_provider}")

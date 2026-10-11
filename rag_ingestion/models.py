@@ -15,16 +15,16 @@ class PolicyChunk:
 
     Attributes
     ----------
-    chunk_id        : stable unique ID — deterministic hash, safe to upsert
+    chunk_id        : stable unique ID (deterministic hash, safe to upsert)
     source_file     : original PDF filename
     page_start      : first page where this chunk's text appears
     page_end        : last page where this chunk's text appears
-    section         : top-level section label (e.g., "SECTION B. BENEFITS")
-    sub_section     : clause number/title (e.g., "1.1. Hospitalization")
+    section         : top-level section label (for example, "SECTION B. BENEFITS")
+    sub_section     : clause number or title (for example, "1.1. Hospitalization")
     heading         : full heading text of the parent section
     text            : the chunk text to embed (with context injected)
     token_estimate  : rough token count (len(text) // 4)
-    metadata        : extra flags — has_table, has_list, chunk_index, etc.
+    metadata        : additional flags (has_table, has_list, chunk_index, etc.)
     """
 
     chunk_id: str

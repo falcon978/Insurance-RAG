@@ -16,14 +16,15 @@ from langchain_core.documents import Document
 from langsmith import traceable
 
 from rag.utils import fuse_multi_query_results, fuse_weighted_results
+from rag.exceptions import LexicalStoreError
 
 logger = logging.getLogger(__name__)
 
 
-class UpstashRediSearchRetriever:
+class RedisSearchRetriever:
     """
     Custom LangChain-compatible retriever that executes full-text BM25
-    searches natively on an Upstash Redis database via RediSearch.
+    searches natively on a Redis database via RediSearch.
     This offloads heavy tokenization and BM25 math from the Python server.
     """
 
@@ -65,8 +66,8 @@ class UpstashRediSearchRetriever:
 
             return docs
         except Exception as e:
-            logger.error(f"Upstash RediSearch query failed: {e}")
-            return []
+            logger.error(f"Redis Search query failed: {e}")
+            raise LexicalStoreError(f"Redis Search failed: {e}")
 
 
 class DocumentSearch:
@@ -88,7 +89,7 @@ class DocumentSearch:
 
         Args:
             vector_store: Any LangChain VectorStore (Chroma, Pinecone, etc.).
-            bm25_retriever: Optional BM25 retriever (local or Upstash) for lexical search.
+            bm25_retriever: Optional BM25 retriever (local RAM or Redis) for lexical search.
             top_k: Number of documents to retrieve per retrieval branch.
             semantic_weight: Weight given to semantic (vector) results during final fusion.
             lexical_weight: Weight given to lexical (BM25) results during final fusion.
@@ -104,7 +105,7 @@ class DocumentSearch:
             search_kwargs={"k": self.top_k}
         )
 
-        # Upstash custom retriever handles 'k' internally during init,
+        # Custom Redis retriever handles 'k' internally during init,
         # but LangChain's local BM25 requires setting it as an attribute
         if hasattr(self.bm25_retriever, "k"):
             self.bm25_retriever.k = self.top_k

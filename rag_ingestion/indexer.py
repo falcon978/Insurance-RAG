@@ -6,7 +6,7 @@ Phase 4: Vector Embedding and Lexical Indexing.
 This module acts as the data ingestion DAO (Data Access Object). It delegates
 the instantiation of the Vector DB to the central Factory, while retaining
 the specialized pipeline logic required to batch upload documents to
-local RAM pickles or a serverless Upstash RediSearch engine.
+local RAM pickles or a local persistent RediSearch engine.
 
 Key Features:
   - Idempotent Upserts: Uses a custom `chunk_id` so re-running the script
@@ -19,7 +19,7 @@ import asyncio
 import os
 import pickle
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
@@ -27,6 +27,7 @@ from langchain_core.documents import Document
 # Internal Module Imports
 from config import settings
 from rag.factories import VectorStoreFactory
+from rag.exceptions import LexicalStoreError
 from .models import PolicyChunk
 
 logger = logging.getLogger(__name__)
@@ -35,14 +36,14 @@ logger = logging.getLogger(__name__)
 class PolicyVectorStore:
 
     # Class-level attribute to ensure a globally shared lock across all concurrent instances.
-    _bm25_io_lock = None
+    _bm25_io_lock: Optional[asyncio.Lock] = None
 
     def __init__(
         self,
         collection_name: str,
         device: str = "cpu",
-        redis_client=None,
-        pinecone_index=None,
+        vector_client=None,
+        lexical_client=None,
     ):
         """
         Initializes the embedding model and delegates Vector DB connection to the Factory.
@@ -55,8 +56,8 @@ class PolicyVectorStore:
         self.device = device
 
         # Store clients for ingestion
-        self.redis_client = redis_client
-        self.pinecone_index = pinecone_index
+        self.vector_client = vector_client
+        self.lexical_client = lexical_client
 
         # 1. Initialize Shared Embedding Model Dynamically
         self.embeddings = HuggingFaceEmbeddings(
@@ -69,7 +70,7 @@ class PolicyVectorStore:
         self.vector_store = VectorStoreFactory.get_vector_store(
             collection_name=self.collection_name,
             embeddings=self.embeddings,
-            pinecone_index=self.pinecone_index,
+            vector_client=self.vector_client,
         )
 
     def _prepare_documents(
@@ -198,16 +199,18 @@ class PolicyVectorStore:
             )
         except Exception as e:
             logging.error(f"Critical failure: Could not persist BM25 corpus: {e}")
+            raise LexicalStoreError(f"Could not persist BM25 corpus: {e}")
 
     async def _a_upsert_to_bm25(self, documents: List[Document]):
         """Pickle is synchronous disk I/O, safely threaded and globally locked."""
+        assert self._bm25_io_lock is not None
         async with self._bm25_io_lock:
             await asyncio.to_thread(self._upsert_to_bm25, documents)
 
     async def _a_upsert_to_redis(self, documents: List[Document]):
         """
         Asynchronously creates a RediSearch index (if missing) and batch uploads
-        documents to Upstash Redis for serverless BM25 execution.
+        documents to Redis for BM25 execution.
         """
         from redis.commands.search.field import TextField, TagField
         from redis.commands.search.index_definition import IndexDefinition, IndexType
@@ -215,25 +218,25 @@ class PolicyVectorStore:
         # 2. Assign the 'redis' alias LAST
         import redis.asyncio as redis
 
-        if not self.redis_client:
-            raise ValueError("Redis client was not injected into the indexer.")
+        if not self.lexical_client:
+            raise ValueError("Lexical client was not injected into the indexer.")
 
         index_name = f"idx:{self.collection_name}"
         prefix = f"doc:{self.collection_name}:"
 
         # 1. Ensure RediSearch Index Exists
         try:
-            await self.redis_client.ft(index_name).info()
+            await self.lexical_client.ft(index_name).info()
         except Exception:
             logging.info(f"Creating new RediSearch index: {index_name}")
             schema = (TextField("text"), TagField("chunk_id"), TextField("section"))
             definition = IndexDefinition(prefix=[prefix], index_type=IndexType.HASH)
-            await self.redis_client.ft(index_name).create_index(
+            await self.lexical_client.ft(index_name).create_index(
                 schema, definition=definition
             )
 
         # 2. Batch Upload via Pipeline (HSET inherently handles idempotent overwrites)
-        pipeline = self.redis_client.pipeline(transaction=False)
+        pipeline = self.lexical_client.pipeline(transaction=False)
         for doc in documents:
             chunk_id = doc.metadata.get("chunk_id")
             doc_key = f"{prefix}{chunk_id}"
@@ -250,7 +253,7 @@ class PolicyVectorStore:
         await pipeline.execute()
 
         logging.info(
-            f"Lexical corpus persisted! {len(documents)} chunks upserted to Upstash Redis."
+            f"Lexical corpus persisted! {len(documents)} chunks upserted to Redis."
         )
 
     async def a_index_chunks(self, chunks, batch_size: int = 100):

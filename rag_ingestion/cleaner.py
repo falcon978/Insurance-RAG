@@ -24,11 +24,11 @@ def clean_block_text(text: str) -> str:
     Full cleaning pass for a raw PDF text block.
 
     Applies in order:
-      1. Unicode normalisation   — fixes ligatures, smart quotes, etc.
-      2. De-hyphenation          — rejoins words split across line breaks
-      3. Space/tab collapse      — removes duplicate whitespace
-      4. Newline normalisation   — caps consecutive blank lines at two
-      5. Strip                   — removes leading / trailing whitespace
+      1. Unicode normalisation: fixes ligatures, smart quotes, etc.
+      2. De-hyphenation: rejoins words split across line breaks
+      3. Space/tab collapse: removes duplicate whitespace
+      4. Newline normalisation: caps consecutive blank lines at two
+      5. Strip: removes leading / trailing whitespace
     """
     text = _normalize_unicode(text)
     text = _dehyphenate(text)

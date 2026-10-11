@@ -47,8 +47,8 @@ class ExtractionPipeline:
         chunk_overlap: int = settings.default_chunk_overlap,
         device: str = settings.hf_device,  # Pulls from config
         verbose: bool = True,
-        redis_client=None,  # INJECTED: Shared Redis connection pool
-        pinecone_index=None,  # INJECTED: Shared Pinecone HTTP session
+        vector_client=None,
+        lexical_client=None,
     ):
         self.pdf_path = Path(pdf_path)
         self.collection_name = collection_name
@@ -58,8 +58,8 @@ class ExtractionPipeline:
         self.verbose = verbose
 
         # Store injected connections
-        self.redis_client = redis_client
-        self.pinecone_index = pinecone_index
+        self.vector_client = vector_client
+        self.lexical_client = lexical_client
 
     def _log(self, msg: str):
         if self.verbose:
@@ -71,36 +71,36 @@ class ExtractionPipeline:
             raise FileNotFoundError(f"Cannot find {self.pdf_path}")
 
         t0 = time.time()
-        self._log(f"🚀 Starting Async Extraction Pipeline for: {self.pdf_path.name}\n")
+        self._log(f"Starting extraction pipeline for: {self.pdf_path.name}")
 
-        # ── Phase 1: Markdown Extraction ──────────────────────────────
-        self._log("Phase 1/3 — Extracting Markdown via Layout Engine …")
+        # Phase 1: Markdown Extraction
+        self._log("Phase 1/3: Extracting Markdown via layout engine")
         extractor = PDFExtractor(str(self.pdf_path))
         # Execute sequentially to maintain a strict memory ceiling
         doc_meta = await extractor.a_get_metadata()
         toc = await extractor.a_get_toc()
         md_text = await extractor.a_extract_markdown()
 
-        # ── Phase 1.5: Markdown Cleaning ──────────────────────────────
+        # Phase 1.5: Markdown Cleaning
         clean_md = clean_markdown_layout(md_text)
 
-        # ── Phase 2: Chunk & Inject ───────────────────────────────────
-        self._log("Phase 2/3 — Semantic Chunking & Context Injection …")
+        # Phase 2: Chunk & Inject
+        self._log("Phase 2/3: Semantic chunking and context injection")
         chunker = MarkdownHierarchicalChunker(
             chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
         )
         chunks = await chunker.a_chunk(clean_md, self.pdf_path.name)
-        self._log(f"           {len(chunks)} RAG chunks created")
+        self._log(f"Phase 2/3: {len(chunks)} chunks created")
 
-        # ── Phase 3: Index ────────────────────────────────────────────
-        self._log(f"Phase 3/3 — Indexing into {settings.vector_db_type.upper()} …")
+        # Phase 3: Index
+        self._log(f"Phase 3/3: Indexing into {settings.vector_db_type.upper()}")
 
         # Pass the pre-warmed connection pools down to the Vector Store
         store = PolicyVectorStore(
             collection_name=self.collection_name,
             device=self.device,
-            redis_client=self.redis_client,  # Propagated down
-            pinecone_index=self.pinecone_index,  # Propagated down
+            vector_client=self.vector_client,
+            lexical_client=self.lexical_client,
         )
 
         await store.a_index_chunks(chunks)
@@ -118,8 +118,8 @@ class ExtractionPipeline:
         }
 
         self._log(
-            f"\n✅  Pipeline Complete in {elapsed}s — "
-            f"{len(chunks)} chunks successfully indexed!"
+            f"Pipeline complete in {elapsed}s: "
+            f"{len(chunks)} chunks indexed."
         )
 
         return ExtractionResult(

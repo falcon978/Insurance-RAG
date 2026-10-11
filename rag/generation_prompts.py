@@ -147,28 +147,10 @@ BASE_OUTPUT_RULES = """
 OUTPUT RULES
 ====================================================
 
-Use EXACT schemas only.
-
-Do NOT:
-- add extra keys
-- add explanatory prose outside schemas
-- add markdown outside designated markdown fields
-- add trailing commas
+You will be provided with a JSON schema. You MUST follow this schema EXACTLY.
 
 All fields are mandatory.
-
-Use:
-- null for unknown values
-- lowercase true/false for booleans
-
-Do NOT wrap JSON in markdown code fences.
-
-Forbidden outputs include:
-- json code fences
-- markdown fences
-- triple backticks
-
-Output RAW JSON only inside the required delimiters.
+Use null for unknown values.
 """
 
 # ===========================================================================
@@ -239,12 +221,12 @@ Please note: This analysis is based on the provided policy excerpts. Final cover
 """
 
 # ===========================================================================
-# SINGLE POLICY — TASK-SPECIFIC DECISION LOGIC
+# SINGLE POLICY: TASK-SPECIFIC DECISION LOGIC
 # ===========================================================================
 
 SINGLE_POLICY_DECISION_LOGIC = """
 ====================================================
-SINGLE POLICY — DECISION ENGINE
+SINGLE POLICY: DECISION ENGINE
 ====================================================
 
 You are operating as a deterministic Insurance Claims Adjudication Engine.
@@ -252,7 +234,7 @@ You are operating as a deterministic Insurance Claims Adjudication Engine.
 You MUST evaluate the claim using STRICT PRECEDENCE ORDER.
 
 ----------------------------------------------------
-STEP 1 — SPECIFIC EXCEPTION CHECK
+STEP 1: SPECIFIC EXCEPTION CHECK
 ----------------------------------------------------
 
 Determine whether the policy explicitly creates
@@ -280,7 +262,7 @@ full approval for the ENTIRE query.
 All remaining queried components must still be evaluated.
 
 ----------------------------------------------------
-STEP 2 — GENERAL EXCLUSION CHECK
+STEP 2: GENERAL EXCLUSION CHECK
 ----------------------------------------------------
 
 If no applicable specific exception exists,
@@ -295,7 +277,7 @@ If exclusion fully applies:
 -> coverage_status = NO
 
 ----------------------------------------------------
-STEP 3 — SILENCE / AMBIGUITY CHECK
+STEP 3: SILENCE / AMBIGUITY CHECK
 ----------------------------------------------------
 
 Silence regarding a specific queried component
@@ -324,7 +306,7 @@ is absent from retrieved context,
 coverage_status MUST be CONDITIONAL.
 
 ----------------------------------------------------
-STEP 4 — EXPLICIT COVERAGE CHECK
+STEP 4: EXPLICIT COVERAGE CHECK
 ----------------------------------------------------
 
 Coverage can ONLY be YES if:
@@ -356,12 +338,12 @@ LOW:
 """
 
 # ===========================================================================
-# SINGLE POLICY — TASK-SPECIFIC ADVISORY LOGIC
+# SINGLE POLICY: TASK-SPECIFIC ADVISORY LOGIC
 # ===========================================================================
 
 SINGLE_POLICY_ADVISORY_LOGIC = """
 ====================================================
-SINGLE POLICY — ADVISORY LAYER
+SINGLE POLICY: ADVISORY LAYER
 ====================================================
 
 The advisory layer is NON-AUTHORITATIVE.
@@ -417,12 +399,12 @@ Otherwise:
 """
 
 # ===========================================================================
-# COMPARE POLICY — TASK-SPECIFIC DECISION LOGIC
+# COMPARE POLICY: TASK-SPECIFIC DECISION LOGIC
 # ===========================================================================
 
 COMPARE_POLICY_DECISION_LOGIC = """
 ====================================================
-COMPARE POLICY — DUAL ADJUDICATION ENGINE
+COMPARE POLICY: DUAL ADJUDICATION ENGINE
 ====================================================
 
 Policy A and Policy B MUST be evaluated independently FIRST.
@@ -524,12 +506,12 @@ Do NOT synchronize confidence scores artificially.
 """
 
 # ===========================================================================
-# COMPARE POLICY — TASK-SPECIFIC ADVISORY LOGIC
+# COMPARE POLICY: TASK-SPECIFIC ADVISORY LOGIC
 # ===========================================================================
 
 COMPARE_POLICY_ADVISORY_LOGIC = """
 ====================================================
-COMPARE POLICY — COMPARATIVE ADVISORY LAYER
+COMPARE POLICY: COMPARATIVE ADVISORY LAYER
 ====================================================
 
 The advisory layer is NON-AUTHORITATIVE.
@@ -608,7 +590,7 @@ Questions MUST:
 """
 
 # ===========================================================================
-# SINGLE POLICY — UNIFIED TEMPLATE
+# SINGLE POLICY: UNIFIED TEMPLATE
 # ===========================================================================
 
 # Assemble the static system string first using string concatenation
@@ -623,47 +605,20 @@ single_policy_system_text = (
     + "\n\n"
     + """
 ====================================================
-PHASE 1 — AUTHORITATIVE ADJUDICATION OUTPUT
+PHASE 1: AUTHORITATIVE ADJUDICATION OUTPUT
 ====================================================
 
-Output ONLY inside:
-
-<<<BEGIN_ADJUDICATION_JSON>>>
-{
-  "coverage_status": "YES | NO | CONDITIONAL",
-  "primary_clause": "string or null",
-  "specific_exception_found": {
-    "exists": true,
-    "clause": "string or null"
-  },
-  "gap_analysis": "string or null",
-  "decision_confidence": "HIGH | MEDIUM | LOW",
-  "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-}
-<<<END_ADJUDICATION_JSON>>>
+Provide the authoritative adjudication in the 'adjudication' object according to the schema.
 """
     + "\n\n"
     + SINGLE_POLICY_ADVISORY_LOGIC
     + "\n\n"
     + """
 ====================================================
-PHASE 2 — NON-AUTHORITATIVE ADVISORY OUTPUT
+PHASE 2: NON-AUTHORITATIVE ADVISORY OUTPUT
 ====================================================
 
-Output ONLY inside:
-
-<<<BEGIN_ADVISORY_REPORT>>>
-{
-  "executive_summary": "markdown string",
-  "deep_dive": "markdown string",
-  "risk_disclosure": "markdown string",
-  "follow_up_questions": [
-    "question 1",
-    "question 2"
-  ],
-  "mandatory_disclaimer": "Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review."
-}
-<<<END_ADVISORY_REPORT>>>
+Provide the advisory report in the 'advisory_report' object according to the schema.
 """
 )
 
@@ -677,7 +632,7 @@ single_policy_unified_template = ChatPromptTemplate.from_messages(
 )
 
 # ===========================================================================
-# COMPARE POLICY — UNIFIED TEMPLATE
+# COMPARE POLICY: UNIFIED TEMPLATE
 # ===========================================================================
 
 compare_policies_system_text = (
@@ -691,65 +646,20 @@ compare_policies_system_text = (
     + "\n\n"
     + """
 ====================================================
-PHASE 1 — AUTHORITATIVE COMPARATIVE ADJUDICATION
+PHASE 1: AUTHORITATIVE COMPARATIVE ADJUDICATION
 ====================================================
 
-Output ONLY inside:
-
-<<<BEGIN_ADJUDICATION_JSON>>>
-{
-  "policy_a": {
-    "coverage_status": "YES | NO | CONDITIONAL",
-    "primary_clause": "string or null",
-    "specific_exception_found": {
-      "exists": true,
-      "clause": "string or null"
-    },
-    "gap_analysis": "string or null",
-    "decision_confidence": "HIGH | MEDIUM | LOW",
-    "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-  },
-  "policy_b": {
-    "coverage_status": "YES | NO | CONDITIONAL",
-    "primary_clause": "string or null",
-    "specific_exception_found": {
-      "exists": true,
-      "clause": "string or null"
-    },
-    "gap_analysis": "string or null",
-    "decision_confidence": "HIGH | MEDIUM | LOW",
-    "document_completeness": "COMPLETE | PARTIAL | INSUFFICIENT"
-  },
-  "comparison_verdict": {
-    "mathematical_winner": "POLICY_A | POLICY_B | TIE | CANNOT_DETERMINE",
-    "winning_reason": "string or null"
-  }
-}
-<<<END_ADJUDICATION_JSON>>>
+Provide the authoritative adjudication in the 'adjudication' object according to the schema.
 """
     + "\n\n"
     + COMPARE_POLICY_ADVISORY_LOGIC
     + "\n\n"
     + """
 ====================================================
-PHASE 2 — NON-AUTHORITATIVE COMPARATIVE ADVISORY
+PHASE 2: NON-AUTHORITATIVE COMPARATIVE ADVISORY
 ====================================================
 
-Output ONLY inside:
-
-<<<BEGIN_ADVISORY_REPORT>>>
-{
-  "executive_summary": "markdown string",
-  "comparison_table": "markdown table string",
-  "deep_dive": "markdown string",
-  "risk_disclosure": "markdown string",
-  "follow_up_questions": [
-    "question 1",
-    "question 2"
-  ],
-  "mandatory_disclaimer": "Please note: This analysis is based on the provided policy excerpts. Final coverage decisions are always subject to the insurer's formal claims adjudication process and medical review."
-}
-<<<END_ADVISORY_REPORT>>>
+Provide the comparative advisory report in the 'advisory_report' object according to the schema.
 """
 )
 

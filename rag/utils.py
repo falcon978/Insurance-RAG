@@ -65,7 +65,7 @@ def fuse_multi_query_results(
             doc_hash = hash(doc.page_content)
 
             if doc_hash not in fused_scores:
-                fused_scores[doc_hash] = 0
+                fused_scores[doc_hash] = 0.0
                 doc_map[doc_hash] = doc
 
             # RRF Formula: 1 / (k + rank)
@@ -111,7 +111,7 @@ def fuse_weighted_results(
     for rank, doc in enumerate(list_a):
         doc_hash = hash(doc.page_content)
         if doc_hash not in fused_scores:
-            fused_scores[doc_hash] = 0
+            fused_scores[doc_hash] = 0.0
             doc_map[doc_hash] = doc
         fused_scores[doc_hash] += weight_a * (1 / (rank + k))
 
@@ -119,7 +119,7 @@ def fuse_weighted_results(
     for rank, doc in enumerate(list_b):
         doc_hash = hash(doc.page_content)
         if doc_hash not in fused_scores:
-            fused_scores[doc_hash] = 0
+            fused_scores[doc_hash] = 0.0
             doc_map[doc_hash] = doc
         fused_scores[doc_hash] += weight_b * (1 / (rank + k))
 
@@ -140,26 +140,25 @@ def render_advisory_markdown(response_data: dict) -> str:
     md = ""
 
     if "executive_summary" in response_data:
-        md += f"### 📑 Executive Summary\n{response_data['executive_summary']}\n\n"
+        md += f"### Executive Summary\n{response_data['executive_summary']}\n\n"
 
     if "comparison_table" in response_data:
-        md += f"### ⚖️ Policy Comparison\n{response_data['comparison_table']}\n\n"
+        md += f"### Policy Comparison\n{response_data['comparison_table']}\n\n"
 
     if "deep_dive" in response_data:
-        md += f"### 🔍 Deep Dive\n{response_data['deep_dive']}\n\n"
+        md += f"### Detailed Analysis\n{response_data['deep_dive']}\n\n"
 
     if "risk_disclosure" in response_data:
-        md += f"### ⚠️ Risk Disclosure\n{response_data['risk_disclosure']}\n\n"
+        md += f"### Risk Disclosure\n{response_data['risk_disclosure']}\n\n"
 
     if "follow_up_questions" in response_data and response_data["follow_up_questions"]:
-        md += "### 📋 Action Items for Insurer / Client\n"
-        md += "*To finalize this adjudication, please obtain the following:* \n"
+        md += "### Action Items\n"
+        md += "*To finalize this adjudication, the following items are required:*\n"
         for q in response_data["follow_up_questions"]:
             md += f"- {q}\n"
         md += "\n"
 
     if "mandatory_disclaimer" in response_data:
-        md += "---\n"
-        md += f"*{response_data['mandatory_disclaimer']}*"
+        md += f"*{response_data['mandatory_disclaimer']}*\n"
 
     return md

@@ -35,7 +35,15 @@ class InsuranceRAGEngine:
     Initializes shared models and delegates data fetching to the retrieval layer.
     """
 
-    def __init__(self, gemini_api_key: str, redis_client=None, pinecone_index=None):
+    def __init__(
+        self,
+        embeddings: HuggingFaceEmbeddings,
+        reranker: ContextReranker,
+        generator: ResponseGenerator,
+        rewriter_chain,
+        vector_client=None,
+        lexical_client=None,
+    ):
         """
         Initializes the retrieval and generation engine with shared models
         and the structured query translation chain.
@@ -45,33 +53,14 @@ class InsuranceRAGEngine:
         )
 
         # Store injected connections
-        self.redis_client = redis_client
-        self.pinecone_index = pinecone_index
+        self.vector_client = vector_client
+        self.lexical_client = lexical_client
 
-        # 1. Initialize Shared Models Dynamically
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=settings.embed_model_name,
-            model_kwargs={"device": settings.hf_device},
-            encode_kwargs={
-                "normalize_embeddings": True
-            },  # Enforces L2 Normalization for dot-product compatibility
-        )
-        self.reranker = ContextReranker(
-            model_name=settings.rerank_model_name, device=settings.hf_device
-        )
-        self.generator = ResponseGenerator(
-            api_key=gemini_api_key, model_name=settings.llm_model_name
-        )
-
-        # 2. Initialize the Structured Output Translation Layer
-        planner_llm = ChatGoogleGenerativeAI(
-            model=settings.planner_model_name,
-            temperature=settings.planner_temperature,
-            api_key=gemini_api_key,
-        )
-
-        # 3. Initialize the Structured Output Translation Layer
-        self.rewriter_chain = get_structured_rewriter_chain(planner_llm)
+        # Store injected models
+        self.embeddings = embeddings
+        self.reranker = reranker
+        self.generator = generator
+        self.rewriter_chain = rewriter_chain
 
     def _get_search_engine(
         self,
@@ -87,14 +76,14 @@ class InsuranceRAGEngine:
         vector_store = VectorStoreFactory.get_vector_store(
             collection_name=collection_name,
             embeddings=self.embeddings,
-            pinecone_index=self.pinecone_index,
+            vector_client=self.vector_client,
         )
 
         # 2. Delegate Lexical Database creation to the Factory
         bm25_retriever = LexicalStoreFactory.get_lexical_retriever(
             collection_name=collection_name,
             top_k=retrieve_top_k,
-            redis_client=self.redis_client,
+            lexical_client=self.lexical_client,
         )
 
         # 3. Return the Orchestrator
@@ -111,6 +100,20 @@ class InsuranceRAGEngine:
         name = collection_name.replace("insurance_", "").replace("_", " ").title()
         return name
 
+    async def _a_prepare_search_strings(self, query: str) -> tuple[str, str]:
+        """Translates the query and generates the lexical and semantic search strings."""
+        structured_query = await self.rewriter_chain.ainvoke({"query": query})
+        
+        bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
+        vector_string = (
+            f"{structured_query.canonical_query} "
+            f"{' '.join(structured_query.expanded_terms)} "
+            f"{' '.join(structured_query.exclusion_terms)} "
+            f"{' '.join(structured_query.policy_sections)}"
+        ).strip()
+        
+        return bm25_string, vector_string
+
     async def a_query_single_policy(
         self,
         query: str,
@@ -126,17 +129,8 @@ class InsuranceRAGEngine:
         s_weight = kwargs.get("semantic_weight", settings.default_semantic_weight)
         l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
-        # 1. Generate Structured Intent Representation for Retrieval Optimization
-        structured_query = await self.rewriter_chain.ainvoke({"query": query})
-
-        # 2. Pre-Process Search Strings
-        bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
-        vector_string = (
-            f"{structured_query.canonical_query} "
-            f"{' '.join(structured_query.expanded_terms)} "
-            f"{' '.join(structured_query.exclusion_terms)} "
-            f"{' '.join(structured_query.policy_sections)}"
-        ).strip()
+        # 1 & 2. Pre-Process Search Strings via Rewriter Chain
+        bm25_string, vector_string = await self._a_prepare_search_strings(query)
 
         logger.info(f"[Retrieval Target] {collection_name}")
         logger.info(f"[BM25 Query] '{bm25_string}'")
@@ -193,17 +187,8 @@ class InsuranceRAGEngine:
         s_weight = kwargs.get("semantic_weight", settings.default_semantic_weight)
         l_weight = kwargs.get("lexical_weight", settings.default_lexical_weight)
 
-        # 1. Generate Structured Intent (Executes once for consistency across both policies)
-        structured_query = await self.rewriter_chain.ainvoke({"query": query})
-
-        # 2. Pre-Process Search Strings
-        bm25_string = f"{query} {' '.join(structured_query.medical_terms)}".strip()
-        vector_string = (
-            f"{structured_query.canonical_query} "
-            f"{' '.join(structured_query.expanded_terms)} "
-            f"{' '.join(structured_query.exclusion_terms)} "
-            f"{' '.join(structured_query.policy_sections)}"
-        ).strip()
+        # 1 & 2. Pre-Process Search Strings via Rewriter Chain (Executes once for consistency)
+        bm25_string, vector_string = await self._a_prepare_search_strings(query)
 
         logger.info(f"[Comparative Retrieval] '{collection_a}' vs '{collection_b}'")
         logger.info(f"[BM25 Query] '{bm25_string}'")
