@@ -8,12 +8,19 @@ Toggles between 'chroma'/'pinecone' for dense vector storage and
 
 import os
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Literal
 
 
 class Settings(BaseSettings):
+    @field_validator("vector_db_type", "lexical_db_type", "inference_provider", mode="before")
+    @classmethod
+    def force_lower_case(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
     # Toggle between 'chroma' (local) and 'pinecone' (cloud)
-    vector_db_type: Literal["chroma", "pinecone"] = os.getenv(
+    vector_db_type: Literal["chroma", "pinecone"] = os.getenv(  # type: ignore[assignment]
         "VECTOR_DB_TYPE", "chroma"
     )
 
@@ -25,9 +32,10 @@ class Settings(BaseSettings):
     pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME")
 
     # Lexical DB Config
-    lexical_db_type: Literal["ram", "redis"] = os.getenv("LEXICAL_DB_TYPE", "ram")
+    lexical_db_type: Literal["ram", "redis"] = os.getenv("LEXICAL_DB_TYPE", "ram")  # type: ignore[assignment]
     bm25_dir: str = "./bm25_cache"
     redis_url: str = os.getenv("REDIS_URL")
+    redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
 
     # MODEL CONFIGURATION
     embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")
@@ -50,9 +58,14 @@ class Settings(BaseSettings):
     default_chunk_size: int = int(os.getenv("CHUNK_SIZE", 2000))
     default_chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 300))
 
+    # Frontend / Conversational Settings
+    max_history_messages: int = int(os.getenv("MAX_HISTORY_MESSAGES", 6))
+
     # LLM and Device Config
+    inference_provider: str = os.getenv("INFERENCE_PROVIDER", "gemini") # "gemini" or "groq"
     admin_password: str = os.getenv("ADMIN_PASSWORD", "admin123")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY")
+    groq_api_key: str = os.getenv("GROQ_API_KEY")
     hf_device: str = os.getenv("HF_DEVICE", "cpu")  # Set to 'cuda' for GPU acceleration
 
     # LangSmith Config

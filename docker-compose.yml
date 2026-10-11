@@ -1,0 +1,51 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Pass through any required environment variables here
+      - VECTOR_DB_TYPE=${VECTOR_DB_TYPE:-pinecone}
+      - LEXICAL_DB_TYPE=${LEXICAL_DB_TYPE:-ram}
+      - INFERENCE_PROVIDER=${INFERENCE_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME}
+      # If falling back to redis lexical:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      # Map the local cache directory so RAM-based BM25 indexes persist across container restarts
+      - ./bm25_cache:/app/bm25_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack-server:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    ports:
+      - "8501:8501"
+    environment:
+      # Route the internal API URL to the Docker compose backend service
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
