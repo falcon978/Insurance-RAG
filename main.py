@@ -1,40 +1,27 @@
 """
 main.py
 -------
-FastAPI Backend. Orchestrates ingestion and RAG querying.
+FastAPI application entry point. Configures lifespan, models, middleware, and routers.
 """
-
-import os
-
-# --- HARDCODE THREAD LIMITS TO PREVENT CPU THRASHING ---
-os.environ["OMP_NUM_THREADS"] = "2"
-os.environ["MKL_NUM_THREADS"] = "2"
-os.environ["OPENBLAS_NUM_THREADS"] = "2"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Prevents HF tokenizer thread warnings
 
 import logging
 import sys
-import shutil
-import tempfile
-import httpx
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends
+from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from config import settings
-from engine import InsuranceRAGEngine
-from rag_ingestion.pipeline import ExtractionPipeline
-from rag_ingestion.indexer import PolicyVectorStore
-from schemas import (
-    SingleQueryRequest,
-    CompareQueryRequest,
-    UrlIngestRequest,
-    CollectionListResponse,
-    StandardResponse,
-)
+from rag.factories import InferenceModelFactory
+from rag.rerankers import ContextReranker
+from rag.generator import ResponseGenerator
+from rag.query_rewriter import get_structured_rewriter_chain
+from api.exception_handlers import register_exception_handlers
+from api.routers.query import router as query_router
+from api.routers.admin import router as admin_router
 
-# Set up a basic console handler for observability
+# Set up standard console logger
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -44,9 +31,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# --- CONNECTION POOL LIFECYCLE ---
+# --- CONNECTION POOL & MODEL LIFECYCLE ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Initializes shared database connection pools and pre-warms ML models.
+    Stores instances on application state for dependency injection.
+    """
     import redis.asyncio as redis
 
     logger.info("Initializing Database Connection Pools...")
@@ -57,6 +48,7 @@ async def lifespan(app: FastAPI):
         decode_responses=True,
         health_check_interval=30,
         retry_on_timeout=True,
+        max_connections=settings.redis_max_connections,
     )
 
     # 2. Initialize Pinecone (HTTP Session Pool)
@@ -68,257 +60,53 @@ async def lifespan(app: FastAPI):
     else:
         app.state.pinecone_index = None
 
-    yield  # App processes requests here
+    # 3. Initialize Chroma (Persistent Disk Client)
+    if settings.vector_db_type == "chroma":
+        import chromadb
+
+        app.state.chroma_client = chromadb.PersistentClient(path=settings.chroma_dir)
+    else:
+        app.state.chroma_client = None
+
+    # 4. Pre-warm ML Models
+    logger.info("Initializing ML Models (Embeddings, Reranker, LLMs)...")
+    app.state.embeddings = HuggingFaceEmbeddings(
+        model_name=settings.embed_model_name,
+        model_kwargs={"device": settings.hf_device},
+        encode_kwargs={"normalize_embeddings": True},
+    )
+    app.state.reranker = ContextReranker(
+        model_name=settings.rerank_model_name, device=settings.hf_device
+    )
+    generator_llm = InferenceModelFactory.get_chat_model(
+        model_name=settings.llm_model_name, temperature=0.0
+    )
+    app.state.generator = ResponseGenerator(llm=generator_llm)
+
+    planner_llm = InferenceModelFactory.get_chat_model(
+        model_name=settings.planner_model_name,
+        temperature=settings.planner_temperature,
+    )
+    app.state.rewriter_chain = get_structured_rewriter_chain(planner_llm)
+
+    yield  # Application serves requests here
 
     logger.info("Closing database connections...")
     await app.state.redis.aclose()
 
 
-app = FastAPI(title="Insurance RAG API", lifespan=lifespan)
+# --- APPLICATION INITIALIZATION ---
+app = FastAPI(title="Insurance Policy RAG API", lifespan=lifespan)
 
+# Register custom domain exception handlers
+register_exception_handlers(app)
 
-# --- DEPENDENCY INJECTION ---
-async def get_redis(request: Request):
-    return request.app.state.redis
-
-
-async def get_pinecone_index(request: Request):
-    return request.app.state.pinecone_index
-
-
-# Inject connections into the RAG Engine dynamically per-request
-async def get_rag_engine(
-    redis_client=Depends(get_redis), pinecone_index=Depends(get_pinecone_index)
-):
-    return InsuranceRAGEngine(
-        gemini_api_key=settings.gemini_api_key,
-        redis_client=redis_client,
-        pinecone_index=pinecone_index,
-    )
+# Register API Routers
+app.include_router(query_router)
+app.include_router(admin_router)
 
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Redirects the root URL to the interactive Swagger UI."""
+    """Redirects the root URL to interactive Swagger UI documentation."""
     return RedirectResponse(url="/docs")
-
-
-# --- HELPER FUNCTION ---
-async def check_if_already_indexed(
-    collection_name: str, redis_client, pinecone_index
-) -> bool:
-    """
-    Instantiates the VectorStore to run a lightning-fast, zero-cost
-    database check before wasting CPU on PDF parsing.
-    """
-    store = PolicyVectorStore(
-        collection_name=collection_name,
-        redis_client=redis_client,
-        pinecone_index=pinecone_index,
-    )
-    return await store._a_is_namespace_populated()
-
-
-# --- QUERY ENDPOINTS ---
-
-
-@app.post("/api/v1/query/single", response_model=StandardResponse)
-async def query_single(
-    req: SingleQueryRequest, rag_engine: InsuranceRAGEngine = Depends(get_rag_engine)
-):
-    try:
-        answer = await rag_engine.a_query_single_policy(
-            query=req.query,
-            collection_name=req.collection_name,
-            history=req.history,
-            retrieve_top_k=req.retrieve_top_k,
-            rerank_top_k=req.rerank_top_k,
-        )
-        return StandardResponse(
-            status="success",
-            message="Query processed",
-            data={"markdown_report": answer},
-        )
-    except Exception as e:
-        logger.error(f"Error processing single query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/v1/query/compare", response_model=StandardResponse)
-async def query_compare(
-    req: CompareQueryRequest, rag_engine: InsuranceRAGEngine = Depends(get_rag_engine)
-):
-    try:
-        answer = await rag_engine.a_compare_policies(
-            query=req.query,
-            collection_a=req.collection_a,
-            collection_b=req.collection_b,
-            history=req.history,
-            retrieve_top_k=req.retrieve_top_k,
-            rerank_top_k=req.rerank_top_k,
-        )
-        return StandardResponse(
-            status="success",
-            message="Comparison processed",
-            data={"markdown_report": answer},
-        )
-    except Exception as e:
-        logger.error(f"Error processing comparison query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- ADMIN ENDPOINTS ---
-
-
-@app.post("/api/v1/admin/ingest/file")
-async def ingest_file(
-    file: UploadFile = File(...),
-    collection_name: str = Form(...),
-    chunk_size: int = Form(settings.default_chunk_size),
-    chunk_overlap: int = Form(settings.default_chunk_overlap),
-    redis_client=Depends(get_redis),
-    pinecone_index=Depends(get_pinecone_index),
-):
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-
-    # EARLY EXIT: Prevent wasteful disk write and CPU chunking
-    if await check_if_already_indexed(collection_name, redis_client, pinecone_index):
-        return StandardResponse(
-            status="success",
-            message=f"Skipped: Collection '{collection_name}' is already indexed.",
-        )
-
-    tmp_path = ""
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            tmp_path = tmp.name
-
-        await ExtractionPipeline(
-            pdf_path=tmp_path,
-            collection_name=collection_name,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            redis_client=redis_client,
-            pinecone_index=pinecone_index,
-        ).a_run()
-
-        return StandardResponse(
-            status="success", message=f"Successfully indexed {file.filename}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-
-@app.post("/api/v1/admin/ingest/url")
-async def ingest_url(
-    req: UrlIngestRequest,
-    redis_client=Depends(get_redis),
-    pinecone_index=Depends(get_pinecone_index),
-):
-    """Downloads and indexes a PDF from a provided URL using non-blocking network I/O."""
-
-    # EARLY EXIT: Prevent wasteful network download and CPU chunking
-    if await check_if_already_indexed(
-        req.collection_name, redis_client, pinecone_index
-    ):
-        return StandardResponse(
-            status="success",
-            message=f"Skipped: Collection '{req.collection_name}' is already indexed.",
-        )
-
-    tmp_path = ""
-    try:
-        # 1. Execute non-blocking network request
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    str(req.url),
-                    headers={"User-Agent": "Mozilla/5.0"},
-                    follow_redirects=True,
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=400, detail=f"Error requesting URL: {exc}"
-                )
-
-        # 2. Write the retrieved bytes to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(response.content)
-            tmp_path = tmp.name
-
-        # 3. Execute the asynchronous extraction pipeline
-        await ExtractionPipeline(
-            pdf_path=tmp_path,
-            collection_name=req.collection_name,
-            chunk_size=req.chunk_size,
-            chunk_overlap=req.chunk_overlap,
-            redis_client=redis_client,
-            pinecone_index=pinecone_index,
-        ).a_run()
-
-        return StandardResponse(status="success", message="URL indexed successfully.")
-    finally:
-        # 4. Ensure cleanup occurs regardless of pipeline success/failure
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-
-@app.get("/api/v1/admin/collections", response_model=CollectionListResponse)
-def list_collections(pinecone_index=Depends(get_pinecone_index)):
-    try:
-        collections = []
-        if settings.vector_db_type == "pinecone" and pinecone_index is not None:
-            stats = pinecone_index.describe_index_stats()
-            collections = list(stats.namespaces.keys())
-        else:
-            import chromadb
-
-            client = chromadb.PersistentClient(path=settings.chroma_dir)
-            collections = [col.name for col in client.list_collections()]
-        return CollectionListResponse(collections=collections)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/v1/admin/collections/{collection_name}")
-async def delete_collection(
-    collection_name: str,
-    redis_client=Depends(get_redis),
-    pinecone_index=Depends(get_pinecone_index),
-):
-    try:
-        # 1. Drop Vector DB Namespace
-        if settings.vector_db_type == "pinecone" and pinecone_index:
-            pinecone_index.delete(delete_all=True, namespace=collection_name)
-        else:
-            import chromadb
-
-            client = chromadb.PersistentClient(path=settings.chroma_dir)
-            client.delete_collection(collection_name)
-
-        # 2. Drop Lexical DB Index
-        if settings.lexical_db_type == "redis" and redis_client:
-            try:
-                # 'DD' drops the index AND deletes all underlying hash documents
-                await redis_client.ft(f"idx:{collection_name}").dropindex(
-                    delete_documents=True
-                )
-            except Exception as e:
-                logger.warning(f"Failed to drop RediSearch index (may not exist): {e}")
-        else:
-            bm25_path = os.path.join(settings.bm25_dir, f"{collection_name}_bm25.pkl")
-            if os.path.exists(bm25_path):
-                os.remove(bm25_path)
-
-        return StandardResponse(
-            status="success", message=f"Collection {collection_name} deleted"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
