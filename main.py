@@ -43,13 +43,16 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Database Connection Pools...")
 
     # 1. Initialize Redis (TCP Pool)
-    app.state.redis = redis.from_url(
-        settings.redis_url,
-        decode_responses=True,
-        health_check_interval=30,
-        retry_on_timeout=True,
-        max_connections=settings.redis_max_connections,
-    )
+    if settings.lexical_db_type == "redis" and settings.redis_url:
+        app.state.redis = redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            health_check_interval=30,
+            retry_on_timeout=True,
+            max_connections=settings.redis_max_connections,
+        )
+    else:
+        app.state.redis = None
 
     # 2. Initialize Pinecone (HTTP Session Pool)
     if settings.vector_db_type == "pinecone":
@@ -92,7 +95,8 @@ async def lifespan(app: FastAPI):
     yield  # Application serves requests here
 
     logger.info("Closing database connections...")
-    await app.state.redis.aclose()
+    if getattr(app.state, "redis", None):
+        await app.state.redis.aclose()
 
 
 # --- APPLICATION INITIALIZATION ---

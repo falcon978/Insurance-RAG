@@ -33,7 +33,7 @@ backend = [
     # Vector Databases
     "chromadb>=0.4.24",
     "langchain-chroma>=0.1.0",
-    "pinecone-client>=3.1.0",
+    "pinecone>=3.1.0",
     "langchain-pinecone>=0.1.0",
     
     # Lexical Databases

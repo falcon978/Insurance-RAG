@@ -20,7 +20,7 @@ from langchain_groq import ChatGroq
 
 try:
     from langchain_pinecone import PineconeVectorStore
-except ImportError:
+except Exception:
     PineconeVectorStore = None
 
 from config import settings

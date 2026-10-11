@@ -9,7 +9,7 @@ Toggles between 'chroma'/'pinecone' for dense vector storage and
 import os
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
-from typing import Literal
+from typing import Literal, Optional
 
 
 class Settings(BaseSettings):
@@ -28,50 +28,48 @@ class Settings(BaseSettings):
     chroma_dir: str = "./chroma_data"
 
     # Pinecone Config
-    pinecone_api_key: str = os.getenv("PINECONE_API_KEY")
-    pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME")
+    pinecone_api_key: Optional[str] = None
+    pinecone_index_name: Optional[str] = None
 
     # Lexical DB Config
-    lexical_db_type: Literal["ram", "redis"] = os.getenv("LEXICAL_DB_TYPE", "ram")  # type: ignore[assignment]
+    lexical_db_type: Literal["ram", "redis"] = "ram"
     bm25_dir: str = "./bm25_cache"
-    redis_url: str = os.getenv("REDIS_URL")
-    redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
+    redis_url: Optional[str] = None
+    redis_max_connections: int = 50
 
     # MODEL CONFIGURATION
-    embed_model_name: str = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-en-v1.5")
-    rerank_model_name: str = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
-    llm_model_name: str = os.getenv("LLM_MODEL_NAME", "gemini-3-flash-preview")
+    embed_model_name: str = "BAAI/bge-large-en-v1.5"
+    rerank_model_name: str = "BAAI/bge-reranker-v2-m3"
+    llm_model_name: str = "gemini-3-flash-preview"
 
     # Planner LLM Configs
-    planner_model_name: str = os.getenv(
-        "PLANNER_LLM_MODEL_NAME", "gemini-3.1-flash-lite"
-    )
+    planner_model_name: str = "gemini-3.1-flash-lite"
     planner_temperature: float = 0.0
 
     # Default Retrieval Hyperparameters
-    default_retrieve_top_k: int = int(os.getenv("DEFAULT_RETRIEVE_TOP_K", 15))
-    default_rerank_top_k: int = int(os.getenv("DEFAULT_RERANK_TOP_K", 5))
-    default_semantic_weight: float = float(os.getenv("DEFAULT_SEMANTIC_WEIGHT", 0.5))
-    default_lexical_weight: float = float(os.getenv("DEFAULT_LEXICAL_WEIGHT", 0.5))
+    default_retrieve_top_k: int = 15
+    default_rerank_top_k: int = 5
+    default_semantic_weight: float = 0.5
+    default_lexical_weight: float = 0.5
 
     # Default Ingestion Hyperparameters
-    default_chunk_size: int = int(os.getenv("CHUNK_SIZE", 2000))
-    default_chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 300))
+    default_chunk_size: int = 2000
+    default_chunk_overlap: int = 300
 
     # Frontend / Conversational Settings
-    max_history_messages: int = int(os.getenv("MAX_HISTORY_MESSAGES", 6))
+    max_history_messages: int = 6
 
     # LLM and Device Config
-    inference_provider: str = os.getenv("INFERENCE_PROVIDER", "gemini") # "gemini" or "groq"
-    admin_password: str = os.getenv("ADMIN_PASSWORD", "admin123")
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY")
-    groq_api_key: str = os.getenv("GROQ_API_KEY")
-    hf_device: str = os.getenv("HF_DEVICE", "cpu")  # Set to 'cuda' for GPU acceleration
+    inference_provider: str = "gemini"  # "gemini" or "groq"
+    admin_password: str = "admin123"
+    gemini_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    hf_device: str = "cpu"  # Set to 'cuda' for GPU acceleration
 
     # LangSmith Config
-    langsmith_tracing_v2: str = os.getenv("LANGSMITH_TRACING_V2", "false")
-    langsmith_api_key: str = os.getenv("LANGSMITH_API_KEY")
-    langsmith_project: str = os.getenv("LANGSMITH_PROJECT")
+    langsmith_tracing_v2: str = "false"
+    langsmith_api_key: Optional[str] = None
+    langsmith_project: Optional[str] = None
 
     class Config:
         env_file = ".env"

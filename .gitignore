@@ -215,6 +215,8 @@ chroma_data/
 bm25_cache/
 *.pkl
 *.sqlite3
+*.ses
+:memory:.ses
 
 # --- Evaluation Results ---
 eval_results/
